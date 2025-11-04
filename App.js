@@ -6,6 +6,7 @@ import HomeScreen from './screens/HomeScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import ProfileSetupScreen from './screens/ProfileSetupScreen';
+import MainHomeScreen from './screens/MainHomeScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
@@ -29,7 +30,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (currentScreen === 'signin' || currentScreen === 'signup' || currentScreen === 'profileSetup') {
+    if (currentScreen === 'signin' || currentScreen === 'signup' || currentScreen === 'profileSetup' || currentScreen === 'mainHome') {
       // Slide in from right and fade in
       Animated.parallel([
         Animated.timing(slideAnim, {
@@ -113,10 +114,26 @@ export default function App() {
     });
   };
 
+  const navigateToMainHome = () => {
+    // Navigate to the main home screen (after login/signup)
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentScreen('mainHome');
+    });
+  };
+
   const handleProfileComplete = () => {
-    // Handle profile completion - for now just go back to home
-    // You can add your own logic here (e.g., navigate to main app, save data, etc.)
-    navigateToHome();
+    // Handle profile completion - navigate to main home
+    navigateToMainHome();
+  };
+
+  const handleSignIn = () => {
+    // Handle sign in - navigate to main home
+    // Database integration will be added later
+    navigateToMainHome();
   };
 
   if (!fontsLoaded) {
@@ -158,6 +175,7 @@ export default function App() {
         password={password}
         setPassword={setPassword}
         onBack={navigateToHome}
+        onSignIn={handleSignIn}
       />
     );
   } else if (currentScreen === 'signup') {
@@ -179,7 +197,7 @@ export default function App() {
         onContinue={navigateToProfileSetup}
       />
     );
-  } else {
+  } else if (currentScreen === 'profileSetup') {
     return (
       <ProfileSetupScreen 
         fadeAnim={fadeAnim}
@@ -195,6 +213,13 @@ export default function App() {
         setAboutYou={setAboutYou}
         onBack={navigateBackToSignUp}
         onContinue={handleProfileComplete}
+      />
+    );
+  } else {
+    return (
+      <MainHomeScreen 
+        fadeAnim={fadeAnim}
+        slideTranslateX={signInTranslateX}
       />
     );
   }

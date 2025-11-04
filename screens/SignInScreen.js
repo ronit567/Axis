@@ -8,7 +8,8 @@ export default function SignInScreen({
   setEmail, 
   password, 
   setPassword, 
-  onBack 
+  onBack,
+  onSignIn 
 }) {
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim, transform: [{ translateX: signInTranslateX }] }]}>
@@ -89,7 +90,10 @@ export default function SignInScreen({
                 <Text style={styles.backButtonText}>‹  Back</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.continueButton}>
+              <TouchableOpacity 
+                style={styles.continueButton}
+                onPress={onSignIn}
+              >
                 <Text style={styles.continueButtonText}>Continue</Text>
               </TouchableOpacity>
             </View>
