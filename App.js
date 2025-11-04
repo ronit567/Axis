@@ -1,15 +1,90 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, Animated } from 'react-native';
 import { useFonts, HammersmithOne_400Regular } from '@expo-google-fonts/hammersmith-one';
+import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from '@expo-google-fonts/poppins';
+import HomeScreen from './screens/HomeScreen';
+import SignInScreen from './screens/SignInScreen';
+import SignUpScreen from './screens/SignUpScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   
   let [fontsLoaded] = useFonts({
-    HammersmithOne_400Regular,   
+    HammersmithOne_400Regular,
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
   });
+
+  useEffect(() => {
+    if (currentScreen === 'signin' || currentScreen === 'signup') {
+      // Slide in from right and fade in
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Reset animations
+      slideAnim.setValue(0);
+      fadeAnim.setValue(1);
+    }
+  }, [currentScreen]);
+
+  const navigateToSignIn = () => {
+    // Fade out current screen
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentScreen('signin');
+    });
+  };
+
+  const navigateToSignUp = () => {
+    // Fade out current screen
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentScreen('signup');
+    });
+  };
+
+  const navigateToHome = () => {
+    // Slide out and fade out
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('home');
+      fadeAnim.setValue(1);
+    });
+  };
 
   if (!fontsLoaded) {
     return (
@@ -19,339 +94,56 @@ export default function App() {
     );
   }
 
-  const renderHomeScreen = () => (
-    <View style={styles.container}>
-      <Image 
-        source={require('./images/header.png')}
-        style={styles.headerImage}
-        resizeMode="cover"
+  const homeTranslateX = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0],
+  });
+
+  const signInTranslateX = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1000, 0],
+  });
+
+  // Render appropriate screen based on current state
+
+  if (currentScreen === 'home') {
+    return (
+      <HomeScreen 
+        fadeAnim={fadeAnim}
+        homeTranslateX={homeTranslateX}
+        onSignIn={navigateToSignIn}
+        onSignUp={navigateToSignUp}
       />
-      <View style={styles.logoContainer}>
-        <Image 
-          source={require('./images/grey_circle.png')}
-          style={styles.greyCircle}
-          resizeMode="contain"
-        />
-        <Image 
-          source={require('./images/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </View>
-      
-      <View style={styles.contentContainer}>
-        <Text style={styles.title}>
-          <Text style={styles.titlePurple}>A</Text>
-          <Text style={styles.titleBlack}>x</Text>
-          <Text style={styles.titlePurple}>i</Text>
-          <Text style={styles.titleBlack}>s</Text>
-        </Text>
-        
-        <Text style={styles.tagline}>
-          <Text style={styles.taglinePurple}>Shop</Text>
-          <Text style={styles.taglineBlack}> and </Text>
-          <Text style={styles.taglinePurple}>sell</Text>
-          <Text style={styles.taglineBlack}> easily—just for your school community</Text>
-        </Text>
-        
-        <View style={styles.homeButtonContainer}>
-          <TouchableOpacity 
-            style={styles.signInButton}
-            onPress={() => {
-              console.log('Sign in button pressed!');
-              setCurrentScreen('signin');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.signInText}>Sign in  ›</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.createAccountButton}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.createAccountText}>Create an account</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderSignInScreen = () => (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <Image 
-          source={require('./images/header.png')}
-          style={styles.headerImageSignIn}
-          resizeMode="cover"
-        />
-        <View style={styles.logoContainerSignIn}>
-          <Image 
-            source={require('./images/grey_circle.png')}
-            style={styles.greyCircle}
-            resizeMode="contain"
-          />
-          <Image 
-            source={require('./images/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
-        
-        <View style={styles.contentContainerSignIn}>
-          <Text style={styles.title}>
-            <Text style={styles.titlePurple}>A</Text>
-            <Text style={styles.titleBlack}>x</Text>
-            <Text style={styles.titlePurple}>i</Text>
-            <Text style={styles.titleBlack}>s</Text>
-          </Text>
-          
-          <Text style={styles.tagline}>
-            <Text style={styles.taglinePurple}>Shop</Text>
-            <Text style={styles.taglineBlack}> and </Text>
-            <Text style={styles.taglinePurple}>sell</Text>
-            <Text style={styles.taglineBlack}> easily—just for your school community</Text>
-          </Text>
-          
-          <View style={styles.formContainer}>
-            <Text style={styles.inputLabel}>Your email address</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder=""
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="next"
-            />
-            
-            <Text style={styles.inputLabel}>Choose a password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder=""
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="done"
-            />
-          </View>
-          
-          <View style={styles.signInButtonContainerForm}>
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={() => setCurrentScreen('home')}
-            >
-              <Text style={styles.backButtonText}>‹  Back</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.continueButton}>
-              <Text style={styles.continueButtonText}>Continue</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-
-  return currentScreen === 'home' ? renderHomeScreen() : renderSignInScreen();
+    );
+  } else if (currentScreen === 'signin') {
+    return (
+      <SignInScreen 
+        fadeAnim={fadeAnim}
+        signInTranslateX={signInTranslateX}
+        email={email}
+        setEmail={setEmail}
+        password={password}
+        setPassword={setPassword}
+        onBack={navigateToHome}
+      />
+    );
+  } else {
+    return (
+      <SignUpScreen 
+        fadeAnim={fadeAnim}
+        signInTranslateX={signInTranslateX}
+        firstName={firstName}
+        setFirstName={setFirstName}
+        lastName={lastName}
+        setLastName={setLastName}
+        email={email}
+        setEmail={setEmail}
+        password={password}
+        setPassword={setPassword}
+        confirmPassword={confirmPassword}
+        setConfirmPassword={setConfirmPassword}
+        onBack={navigateToHome}
+      />
+    );
+  }
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  headerImage: {
-    width: '100%',
-    height: 380,
-    borderBottomLeftRadius: 50,
-    borderBottomRightRadius: 50,
-  },
-  logoContainer: {
-    position: 'absolute',
-    top: 300,
-    alignSelf: 'center',
-    width: 200,
-    height: 200,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  greyCircle: {
-    width: 200,
-    height: 200,
-    position: 'absolute',
-  },
-  logo: {
-    width: 120,
-    height: 120,
-  },
-  contentContainer: {
-    flex: 1,
-    alignItems: 'center',
-    marginTop: 80,
-    paddingHorizontal: 20,
-  },
-  scrollContainer: {
-    flexGrow: 1,
-  },
-  contentContainerSignIn: {
-    alignItems: 'center',
-    marginTop: 85,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  headerImageSignIn: {
-    width: '100%',
-    height: 200,
-    borderBottomLeftRadius: 50,
-    borderBottomRightRadius: 50,
-  },
-  logoContainerSignIn: {
-    position: 'absolute',
-    top: 130,
-    alignSelf: 'center',
-    width: 200,
-    height: 200,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 60,
-    fontFamily: 'HammersmithOne_400Regular',
-    marginBottom: -10,
-  },
-  titlePurple: {
-    color: '#4b307d',
-  },
-  titleBlack: {
-    color: '#000000',
-  },
-  tagline: {
-    fontSize: 13,
-    fontFamily: 'HammersmithOne_400Regular',
-    textAlign: 'center',
-    marginBottom: 40,
-    paddingHorizontal: 15,
-  },
-  taglinePurple: {
-    color: '#4b307d',
-  },
-  taglineBlack: {
-    color: '#000000',
-  },
-  homeButtonContainer: {
-    position: 'absolute',
-    bottom: 50,
-    width: '100%',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  signInButtonContainer: {
-    position: 'absolute',
-    bottom: 50,
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  signInButtonContainerForm: {
-    marginTop: 20,
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  signInButton: {
-    backgroundColor: '#4b307d',
-    paddingVertical: 16,
-    paddingHorizontal: 60,
-    borderRadius: 30,
-    marginBottom: 15,
-    width: 250,
-    alignItems: 'center',
-  },
-  signInText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontFamily: 'HammersmithOne_400Regular',
-  },
-  createAccountButton: {
-    backgroundColor: 'transparent',
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: '#4b307d',
-    width: 250,
-    alignItems: 'center',
-  },
-  createAccountText: {
-    color: '#4b307d',
-    fontSize: 16,
-    fontFamily: 'HammersmithOne_400Regular',
-  },
-  formContainer: {
-    width: '100%',
-    paddingHorizontal: 30,
-    marginTop: -25,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontFamily: 'HammersmithOne_400Regular',
-    color: '#000000',
-    marginBottom: 6,
-    marginTop: 10,
-  },
-  input: {
-    width: '100%',
-    height: 50,
-    borderWidth: 2,
-    borderColor: '#4b307d',
-    borderRadius: 25,
-    paddingHorizontal: 20,
-    fontSize: 16,
-    fontFamily: 'HammersmithOne_400Regular',
-    backgroundColor: '#FFFFFF',
-  },
-  backButton: {
-    backgroundColor: 'transparent',
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: '#4b307d',
-    width: 160,
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  backButtonText: {
-    color: '#4b307d',
-    fontSize: 18,
-    fontFamily: 'HammersmithOne_400Regular',
-  },
-  continueButton: {
-    backgroundColor: '#4b307d',
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    width: 160,
-    alignItems: 'center',
-  },
-  continueButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontFamily: 'HammersmithOne_400Regular',
-  },
-});
