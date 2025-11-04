@@ -5,6 +5,7 @@ import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from '@exp
 import HomeScreen from './screens/HomeScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
+import ProfileSetupScreen from './screens/ProfileSetupScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
@@ -13,6 +14,10 @@ export default function App() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [program, setProgram] = useState('');
+  const [yearOfStudy, setYearOfStudy] = useState('');
+  const [socials, setSocials] = useState('');
+  const [aboutYou, setAboutYou] = useState('');
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
   
@@ -24,7 +29,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (currentScreen === 'signin' || currentScreen === 'signup') {
+    if (currentScreen === 'signin' || currentScreen === 'signup' || currentScreen === 'profileSetup') {
       // Slide in from right and fade in
       Animated.parallel([
         Animated.timing(slideAnim, {
@@ -86,6 +91,34 @@ export default function App() {
     });
   };
 
+  const navigateToProfileSetup = () => {
+    // Fade out current screen
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentScreen('profileSetup');
+    });
+  };
+
+  const navigateBackToSignUp = () => {
+    // Go back to signup screen from profile setup
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentScreen('signup');
+    });
+  };
+
+  const handleProfileComplete = () => {
+    // Handle profile completion - for now just go back to home
+    // You can add your own logic here (e.g., navigate to main app, save data, etc.)
+    navigateToHome();
+  };
+
   if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
@@ -127,7 +160,7 @@ export default function App() {
         onBack={navigateToHome}
       />
     );
-  } else {
+  } else if (currentScreen === 'signup') {
     return (
       <SignUpScreen 
         fadeAnim={fadeAnim}
@@ -143,6 +176,25 @@ export default function App() {
         confirmPassword={confirmPassword}
         setConfirmPassword={setConfirmPassword}
         onBack={navigateToHome}
+        onContinue={navigateToProfileSetup}
+      />
+    );
+  } else {
+    return (
+      <ProfileSetupScreen 
+        fadeAnim={fadeAnim}
+        signInTranslateX={signInTranslateX}
+        firstName={firstName}
+        program={program}
+        setProgram={setProgram}
+        yearOfStudy={yearOfStudy}
+        setYearOfStudy={setYearOfStudy}
+        socials={socials}
+        setSocials={setSocials}
+        aboutYou={aboutYou}
+        setAboutYou={setAboutYou}
+        onBack={navigateBackToSignUp}
+        onContinue={handleProfileComplete}
       />
     );
   }

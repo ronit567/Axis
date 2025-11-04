@@ -14,7 +14,8 @@ export default function SignUpScreen({
   setPassword,
   confirmPassword,
   setConfirmPassword,
-  onBack 
+  onBack,
+  onContinue
 }) {
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim, transform: [{ translateX: signInTranslateX }] }]}>
@@ -116,7 +117,11 @@ export default function SignUpScreen({
                 <Text style={styles.backButtonText}>‹  Back</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.signUpContinueButton}>
+              <TouchableOpacity 
+                style={styles.signUpContinueButton}
+                onPress={onContinue}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.continueButtonText}>Continue</Text>
               </TouchableOpacity>
             </View>
