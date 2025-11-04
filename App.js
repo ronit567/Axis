@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput } from 'react-native';
+import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
 import { useFonts, HammersmithOne_400Regular } from '@expo-google-fonts/hammersmith-one';
 
 export default function App() {
@@ -8,7 +8,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   
   let [fontsLoaded] = useFonts({
-    HammersmithOne_400Regular,
+    HammersmithOne_400Regular,   
   });
 
   if (!fontsLoaded) {
@@ -78,80 +78,90 @@ export default function App() {
   );
 
   const renderSignInScreen = () => (
-    <View style={styles.container}>
-      <Image 
-        source={require('./images/header.png')}
-        style={styles.headerImage}
-        resizeMode="cover"
-      />
-      <View style={styles.logoContainer}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         <Image 
-          source={require('./images/grey_circle.png')}
-          style={styles.greyCircle}
-          resizeMode="contain"
+          source={require('./images/header.png')}
+          style={styles.headerImageSignIn}
+          resizeMode="cover"
         />
-        <Image 
-          source={require('./images/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </View>
-      
-      <View style={styles.contentContainer}>
-        <Text style={styles.title}>
-          <Text style={styles.titlePurple}>A</Text>
-          <Text style={styles.titleBlack}>x</Text>
-          <Text style={styles.titlePurple}>i</Text>
-          <Text style={styles.titleBlack}>s</Text>
-        </Text>
-        
-        <Text style={styles.tagline}>
-          <Text style={styles.taglinePurple}>Shop</Text>
-          <Text style={styles.taglineBlack}> and </Text>
-          <Text style={styles.taglinePurple}>sell</Text>
-          <Text style={styles.taglineBlack}> easily—just for your school community</Text>
-        </Text>
-        
-        <View style={styles.formContainer}>
-          <Text style={styles.inputLabel}>Your email address</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder=""
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="next"
+        <View style={styles.logoContainerSignIn}>
+          <Image 
+            source={require('./images/grey_circle.png')}
+            style={styles.greyCircle}
+            resizeMode="contain"
           />
-          
-          <Text style={styles.inputLabel}>Choose a password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder=""
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="done"
+          <Image 
+            source={require('./images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
           />
         </View>
         
-        <View style={styles.signInButtonContainer}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => setCurrentScreen('home')}
-          >
-            <Text style={styles.backButtonText}>‹  Back</Text>
-          </TouchableOpacity>
+        <View style={styles.contentContainerSignIn}>
+          <Text style={styles.title}>
+            <Text style={styles.titlePurple}>A</Text>
+            <Text style={styles.titleBlack}>x</Text>
+            <Text style={styles.titlePurple}>i</Text>
+            <Text style={styles.titleBlack}>s</Text>
+          </Text>
           
-          <TouchableOpacity style={styles.continueButton}>
-            <Text style={styles.continueButtonText}>Continue</Text>
-          </TouchableOpacity>
+          <Text style={styles.tagline}>
+            <Text style={styles.taglinePurple}>Shop</Text>
+            <Text style={styles.taglineBlack}> and </Text>
+            <Text style={styles.taglinePurple}>sell</Text>
+            <Text style={styles.taglineBlack}> easily—just for your school community</Text>
+          </Text>
+          
+          <View style={styles.formContainer}>
+            <Text style={styles.inputLabel}>Your email address</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder=""
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="next"
+            />
+            
+            <Text style={styles.inputLabel}>Choose a password</Text>
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder=""
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+            />
+          </View>
+          
+          <View style={styles.signInButtonContainerForm}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => setCurrentScreen('home')}
+            >
+              <Text style={styles.backButtonText}>‹  Back</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.continueButton}>
+              <Text style={styles.continueButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 
   return currentScreen === 'home' ? renderHomeScreen() : renderSignInScreen();
@@ -192,10 +202,34 @@ const styles = StyleSheet.create({
     marginTop: 80,
     paddingHorizontal: 20,
   },
+  scrollContainer: {
+    flexGrow: 1,
+  },
+  contentContainerSignIn: {
+    alignItems: 'center',
+    marginTop: 85,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  headerImageSignIn: {
+    width: '100%',
+    height: 200,
+    borderBottomLeftRadius: 50,
+    borderBottomRightRadius: 50,
+  },
+  logoContainerSignIn: {
+    position: 'absolute',
+    top: 130,
+    alignSelf: 'center',
+    width: 200,
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
     fontSize: 60,
     fontFamily: 'HammersmithOne_400Regular',
-    marginBottom: -5,
+    marginBottom: -10,
   },
   titlePurple: {
     color: '#4b307d',
@@ -232,6 +266,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
+  signInButtonContainerForm: {
+    marginTop: 20,
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   signInButton: {
     backgroundColor: '#4b307d',
     paddingVertical: 16,
@@ -264,14 +305,14 @@ const styles = StyleSheet.create({
   formContainer: {
     width: '100%',
     paddingHorizontal: 30,
-    marginTop: -30,
+    marginTop: -25,
   },
   inputLabel: {
     fontSize: 14,
     fontFamily: 'HammersmithOne_400Regular',
     color: '#000000',
-    marginBottom: 8,
-    marginTop: 15,
+    marginBottom: 6,
+    marginTop: 10,
   },
   input: {
     width: '100%',
