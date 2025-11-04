@@ -9,7 +9,7 @@ export default function SignInScreen({
   password, 
   setPassword, 
   onBack,
-  onSignIn 
+  onSignIn
 }) {
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim, transform: [{ translateX: signInTranslateX }] }]}>

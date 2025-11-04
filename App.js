@@ -30,7 +30,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (currentScreen === 'signin' || currentScreen === 'signup' || currentScreen === 'profileSetup' || currentScreen === 'mainHome') {
+    if (currentScreen === 'signin' || currentScreen === 'signup' || currentScreen === 'profileSetup') {
       // Slide in from right and fade in
       Animated.parallel([
         Animated.timing(slideAnim, {
@@ -115,24 +115,18 @@ export default function App() {
   };
 
   const navigateToMainHome = () => {
-    // Navigate to the main home screen (after login/signup)
+    // Navigate to the main home screen after login/signup
     Animated.timing(fadeAnim, {
       toValue: 0,
       duration: 200,
       useNativeDriver: true,
     }).start(() => {
-      setCurrentScreen('mainHome');
+      setCurrentScreen('mainhome');
     });
   };
 
   const handleProfileComplete = () => {
-    // Handle profile completion - navigate to main home
-    navigateToMainHome();
-  };
-
-  const handleSignIn = () => {
-    // Handle sign in - navigate to main home
-    // Database integration will be added later
+    // Navigate to main home screen after profile setup
     navigateToMainHome();
   };
 
@@ -175,7 +169,7 @@ export default function App() {
         password={password}
         setPassword={setPassword}
         onBack={navigateToHome}
-        onSignIn={handleSignIn}
+        onSignIn={navigateToMainHome}
       />
     );
   } else if (currentScreen === 'signup') {
@@ -215,12 +209,7 @@ export default function App() {
         onContinue={handleProfileComplete}
       />
     );
-  } else {
-    return (
-      <MainHomeScreen 
-        fadeAnim={fadeAnim}
-        slideTranslateX={signInTranslateX}
-      />
-    );
+  } else if (currentScreen === 'mainhome') {
+    return <MainHomeScreen firstName={firstName} />;
   }
 }
