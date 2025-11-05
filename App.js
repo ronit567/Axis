@@ -6,6 +6,7 @@ import HomeScreen from './screens/HomeScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import ProfileSetupScreen from './screens/ProfileSetupScreen';
+import MainHomeScreen from './screens/MainHomeScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
@@ -113,10 +114,20 @@ export default function App() {
     });
   };
 
+  const navigateToMainHome = () => {
+    // Navigate to the main home screen after login/signup
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentScreen('mainhome');
+    });
+  };
+
   const handleProfileComplete = () => {
-    // Handle profile completion - for now just go back to home
-    // You can add your own logic here (e.g., navigate to main app, save data, etc.)
-    navigateToHome();
+    // Navigate to main home screen after profile setup
+    navigateToMainHome();
   };
 
   if (!fontsLoaded) {
@@ -158,6 +169,7 @@ export default function App() {
         password={password}
         setPassword={setPassword}
         onBack={navigateToHome}
+        onSignIn={navigateToMainHome}
       />
     );
   } else if (currentScreen === 'signup') {
@@ -179,7 +191,7 @@ export default function App() {
         onContinue={navigateToProfileSetup}
       />
     );
-  } else {
+  } else if (currentScreen === 'profileSetup') {
     return (
       <ProfileSetupScreen 
         fadeAnim={fadeAnim}
@@ -197,5 +209,7 @@ export default function App() {
         onContinue={handleProfileComplete}
       />
     );
+  } else if (currentScreen === 'mainhome') {
+    return <MainHomeScreen firstName={firstName} />;
   }
 }
