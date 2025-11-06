@@ -1,5 +1,7 @@
-import React from 'react';
-import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated, ActivityIndicator } from 'react-native';
+import { signIn, getUserProfile } from '../services/authService';
+import ErrorModal from '../components/ErrorModal';
 
 export default function SignInScreen({ 
   fadeAnim, 
@@ -9,8 +11,76 @@ export default function SignInScreen({
   password, 
   setPassword, 
   onBack,
-  onSignIn
+  onSignIn,
+  onAuthSuccess
 }) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleBack = () => {
+    // Clear password and reset state before going back
+    setPassword('');
+    setIsLoading(false);
+    setShowErrorModal(false);
+    setErrorMessage('');
+    onBack();
+  };
+
+  const handleSignIn = async () => {
+    // Validate inputs
+    if (!email.trim()) {
+      setErrorMessage('Please enter your email address');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!password) {
+      setErrorMessage('Please enter your password');
+      setShowErrorModal(true);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { user, session, error } = await signIn(email, password);
+
+      if (error) {
+        console.error('Sign in error:', error);
+        let message = 'Failed to sign in. Please check your credentials.';
+        
+        if (error.message?.includes('Invalid login credentials')) {
+          message = 'Invalid email or password. Please try again.';
+        } else if (error.message?.includes('Email not confirmed')) {
+          message = 'Please verify your email address before signing in.';
+        }
+        
+        setErrorMessage(message);
+        setShowErrorModal(true);
+        setIsLoading(false);
+        return;
+      }
+
+      if (user) {
+        // Fetch user profile
+        const { profile } = await getUserProfile(user.id);
+        
+        if (onAuthSuccess) {
+          onAuthSuccess(user, profile);
+        }
+        
+        // Navigate to main home
+        onSignIn();
+      }
+    } catch (error) {
+      console.error('Sign in error:', error);
+      setErrorMessage('An error occurred during sign in. Please try again.');
+      setShowErrorModal(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim, transform: [{ translateX: signInTranslateX }] }]}>
       <KeyboardAvoidingView 
@@ -85,21 +155,34 @@ export default function SignInScreen({
             <View style={styles.signInButtonContainerForm}>
               <TouchableOpacity 
                 style={styles.backButton}
-                onPress={onBack}
+                onPress={handleBack}
+                disabled={isLoading}
               >
                 <Text style={styles.backButtonText}>‹  Back</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.continueButton}
-                onPress={onSignIn}
+                style={[styles.continueButton, isLoading && styles.buttonDisabled]}
+                onPress={handleSignIn}
+                disabled={isLoading}
               >
-                <Text style={styles.continueButtonText}>Continue</Text>
+                {isLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.continueButtonText}>Continue</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      <ErrorModal 
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        title="Sign In Error"
+        message={errorMessage}
+      />
     </Animated.View>
   );
 }
@@ -225,5 +308,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'Poppins_500Medium',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });

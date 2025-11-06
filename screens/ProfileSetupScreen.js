@@ -1,5 +1,7 @@
-import React from 'react';
-import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated, ActivityIndicator, Alert } from 'react-native';
+import { signUp } from '../services/authService';
+import ErrorModal from '../components/ErrorModal';
 
 export default function ProfileSetupScreen({ 
   fadeAnim, 
@@ -13,9 +15,47 @@ export default function ProfileSetupScreen({
   setSocials,
   aboutYou,
   setAboutYou,
+  user,
   onBack,
   onContinue
 }) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleContinue = async () => {
+    // Validate required fields
+    if (!program.trim()) {
+      setErrorMessage('Please enter your program');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!yearOfStudy.trim()) {
+      setErrorMessage('Please enter your year of study');
+      setShowErrorModal(true);
+      return;
+    }
+
+    // If user already exists (from App.js state), just update profile
+    if (user) {
+      onContinue();
+      return;
+    }
+
+    // Otherwise, this is a new signup - we'll handle it in App.js
+    // For now, just proceed
+    onContinue();
+  };
+
+  const handleBack = () => {
+    // Reset state before going back
+    setIsLoading(false);
+    setShowErrorModal(false);
+    setErrorMessage('');
+    onBack();
+  };
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim, transform: [{ translateX: signInTranslateX }] }]}>
       <KeyboardAvoidingView 
@@ -105,23 +145,36 @@ export default function ProfileSetupScreen({
             <View style={styles.buttonRow}>
               <TouchableOpacity 
                 style={styles.backButton}
-                onPress={onBack}
+                onPress={handleBack}
                 activeOpacity={0.7}
+                disabled={isLoading}
               >
                 <Text style={styles.backButtonText}>‹  Back</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.continueButton}
-                onPress={onContinue}
+                style={[styles.continueButton, isLoading && styles.buttonDisabled]}
+                onPress={handleContinue}
                 activeOpacity={0.7}
+                disabled={isLoading}
               >
-                <Text style={styles.continueButtonText}>Continue</Text>
+                {isLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.continueButtonText}>Continue</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      <ErrorModal 
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        title="Validation Error"
+        message={errorMessage}
+      />
     </Animated.View>
   );
 }
@@ -242,5 +295,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'Poppins_500Medium',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });
