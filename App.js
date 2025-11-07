@@ -7,6 +7,7 @@ import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import ProfileSetupScreen from './screens/ProfileSetupScreen';
 import MainHomeScreen from './screens/MainHomeScreen';
+import ExploreScreen from './screens/ExploreScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
@@ -19,6 +20,7 @@ export default function App() {
   const [yearOfStudy, setYearOfStudy] = useState('');
   const [socials, setSocials] = useState('');
   const [aboutYou, setAboutYou] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
   
@@ -130,6 +132,29 @@ export default function App() {
     navigateToMainHome();
   };
 
+  const navigateToExplore = (category = 'All') => {
+    setSelectedCategory(category);
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentScreen('explore');
+      fadeAnim.setValue(1);
+    });
+  };
+
+  const navigateBackToMainHome = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentScreen('mainhome');
+      fadeAnim.setValue(1);
+    });
+  };
+
   if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
@@ -210,6 +235,8 @@ export default function App() {
       />
     );
   } else if (currentScreen === 'mainhome') {
-    return <MainHomeScreen firstName={firstName} />;
+    return <MainHomeScreen firstName={firstName} onNavigateToExplore={navigateToExplore} />;
+  } else if (currentScreen === 'explore') {
+    return <ExploreScreen onBack={navigateBackToMainHome} initialCategory={selectedCategory} />;
   }
 }

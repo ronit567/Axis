@@ -1,8 +1,38 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput } from 'react-native';
+import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import ListingCard from '../components/explore/ListingCard';
 
-export default function MainHomeScreen({ firstName }) {
+// Dummy data for home page sections
+const FOR_YOU_ITEMS = [
+  { id: '1', title: 'Calculus Textbook', price: 45, condition: 'Like New', category: 'Books' },
+  { id: '2', title: 'Desk Lamp', price: 20, condition: 'Good', category: 'Furniture' },
+  { id: '3', title: 'Winter Jacket', price: 60, condition: 'Like New', category: 'Clothing' },
+  { id: '4', title: 'Laptop Stand', price: 35, condition: 'Fair', category: 'Electronics' },
+];
+
+const TRENDING_ITEMS = [
+  { id: '5', title: 'Biology Notes', price: 15, condition: 'Good', category: 'Books' },
+  { id: '6', title: 'Mini Fridge', price: 80, condition: 'Like New', category: 'Appliances' },
+  { id: '7', title: 'Graphing Calculator', price: 50, condition: 'Like New', category: 'Electronics' },
+  { id: '8', title: 'Office Chair', price: 70, condition: 'Fair', category: 'Furniture' },
+];
+
+const RECENTLY_LISTED = [
+  { id: '9', title: 'Physics Textbook', price: 55, condition: 'Good', category: 'Books' },
+  { id: '10', title: 'Desk Organizer', price: 12, condition: 'Like New', category: 'Furniture' },
+  { id: '11', title: 'Backpack', price: 30, condition: 'Good', category: 'Clothing' },
+  { id: '12', title: 'Wireless Mouse', price: 18, condition: 'Like New', category: 'Electronics' },
+];
+
+export default function MainHomeScreen({ firstName, onNavigateToExplore }) {
   const [searchText, setSearchText] = useState('');
+  
+  const handleCategoryPress = (category) => {
+    if (onNavigateToExplore) {
+      onNavigateToExplore(category);
+    }
+  };
   
   return (
     <View style={styles.container}>
@@ -59,44 +89,93 @@ export default function MainHomeScreen({ firstName }) {
       </View>
       {/* Category Circles */}
       <View style={styles.categoriesContainer}>
-        <View style={styles.categoryItem}>
-          <TouchableOpacity style={styles.categoryCircleFirst}>
-            <Image 
-              source={require('../images/all_icon.png')}
-              style={styles.categoryIcon}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
-          <Text style={styles.categoryLabel}>All</Text>
-        </View>
+        <TouchableOpacity style={styles.categoryCircleFirst} onPress={() => handleCategoryPress('All')}>
+          <Ionicons name="menu" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
         
-        <View style={styles.categoryItem}>
-          <TouchableOpacity style={styles.categoryCircle}>
-          </TouchableOpacity>
-          <Text style={styles.categoryLabel}>category</Text>
-        </View>
+        <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryPress('Books')}>
+          <Ionicons name="book-outline" size={28} color="#502E82" />
+        </TouchableOpacity>
         
-        <View style={styles.categoryItem}>
-          <TouchableOpacity style={styles.categoryCircle}>
-          </TouchableOpacity>
-          <Text style={styles.categoryLabel}>category</Text>
-        </View>
+        <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryPress('Electronics')}>
+          <Ionicons name="laptop-outline" size={28} color="#502E82" />
+        </TouchableOpacity>
         
-        <View style={styles.categoryItem}>
-          <TouchableOpacity style={styles.categoryCircle}>
-          </TouchableOpacity>
-          <Text style={styles.categoryLabel}>category</Text>
-        </View>
+        <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryPress('Furniture')}>
+          <MaterialCommunityIcons name="bed-outline" size={28} color="#502E82" />
+        </TouchableOpacity>
         
-        <View style={styles.categoryItem}>
-          <TouchableOpacity style={styles.categoryCircle}>
-          </TouchableOpacity>
-          <Text style={styles.categoryLabel}>category</Text>
-        </View>
+        <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryPress('Clothing')}>
+          <Ionicons name="shirt-outline" size={28} color="#502E82" />
+        </TouchableOpacity>
       </View>
       
-      <ScrollView style={styles.content}>
-        {/* Content will be added here */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* For You Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>For You</Text>
+            <TouchableOpacity onPress={() => handleCategoryPress('All')}>
+              <Text style={styles.seeAllText}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={FOR_YOU_ITEMS}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.horizontalCard}>
+                <ListingCard listing={item} />
+              </View>
+            )}
+            contentContainerStyle={styles.horizontalList}
+          />
+        </View>
+
+        {/* Trending Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Trending</Text>
+            <TouchableOpacity onPress={() => handleCategoryPress('All')}>
+              <Text style={styles.seeAllText}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={TRENDING_ITEMS}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.horizontalCard}>
+                <ListingCard listing={item} />
+              </View>
+            )}
+            contentContainerStyle={styles.horizontalList}
+          />
+        </View>
+
+        {/* Recently Listed Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recently Listed</Text>
+            <TouchableOpacity onPress={() => handleCategoryPress('All')}>
+              <Text style={styles.seeAllText}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={RECENTLY_LISTED}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.horizontalCard}>
+                <ListingCard listing={item} />
+              </View>
+            )}
+            contentContainerStyle={styles.horizontalList}
+          />
+        </View>
       </ScrollView>
       
       {/* Cart Icon */}
@@ -111,46 +190,28 @@ export default function MainHomeScreen({ firstName }) {
       {/* Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem}>
-          <Image 
-            source={require('../images/home_icon.png')}
-            style={styles.navIcon}
-            resizeMode="contain"
-          />
-          <Text style={styles.navLabel}>Home</Text>
+          <Ionicons name="home" size={28} color="#B39BD5" />
+          <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.navItem}>
-          <Image 
-            source={require('../images/heart_icon.png')}
-            style={styles.favoritesIcon}
-            resizeMode="contain"
-          />
-          <Text style={styles.navLabel}>Favorites</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => handleCategoryPress('All')}>
+          <Ionicons name="search-outline" size={28} color="#999999" />
+          <Text style={styles.navLabel}>Explore</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.sellButton}>
-          <Image 
-            source={require('../images/add_icon.png')}
-            style={styles.addIcon}
-            resizeMode="contain"
-          />
+          <View style={styles.addButtonCircle}>
+            <Ionicons name="add" size={32} color="#FFFFFF" />
+          </View>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem}>
-          <Image 
-            source={require('../images/messages_icon.png')}
-            style={styles.navIcon}
-            resizeMode="contain"
-          />
+          <Ionicons name="chatbubble-ellipses-outline" size={28} color="#999999" />
           <Text style={styles.navLabel}>Messages</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem}>
-          <Image 
-            source={require('../images/profile_icon.png')}
-            style={styles.navIcon}
-            resizeMode="contain"
-          />
+          <Ionicons name="person-outline" size={28} color="#999999" />
           <Text style={styles.navLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
@@ -169,7 +230,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     width: '100%',
-    height: 310,
+    height: 295,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
     overflow: 'hidden',
@@ -182,7 +243,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: '#ECECEC',
-    marginTop: 305,
+    marginTop: 210,
+    paddingTop: 60,
+    paddingBottom: 100,
   },
   headerOverlay: {
     position: 'absolute',
@@ -229,7 +292,7 @@ const styles = StyleSheet.create({
   },
   searchBarContainer: {
     position: 'absolute',
-    top: 195,
+    top: 185,
     left: 20,
     right: 20,
     flexDirection: 'row',
@@ -253,17 +316,15 @@ const styles = StyleSheet.create({
   },
   categoriesContainer: {
     position: 'absolute',
-    top: 215,
+    top: 200,
     left: 0,
     right: 0,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: 20,
-    zIndex: 2,
-  },
-  categoryItem: {
     alignItems: 'center',
-    marginRight: 12,
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    gap: 12,
+    zIndex: 3,
   },
   categoryCircleFirst: {
     width: 60,
@@ -272,6 +333,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#B39BD5',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   categoryCircle: {
     width: 60,
@@ -280,17 +346,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  categoryIcon: {
-    width: 30,
-    height: 30,
-  },
-  categoryLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins_400Regular',
-    color: '#000000',
-    marginTop: 5,
-    textAlign: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   cartButton: {
     position: 'absolute',
@@ -315,7 +375,7 @@ const styles = StyleSheet.create({
   },
   bottomNav: {
     position: 'absolute',
-    bottom: 10,
+    bottom: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -331,29 +391,60 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 60,
   },
-  navIcon: {
-    width: 32,
-    height: 32,
-    marginBottom: 4,
-  },
-  favoritesIcon: {
-    width: 36,
-    height: 36,
-    marginBottom: 2,
-  },
   navLabel: {
     fontSize: 12,
     fontFamily: 'Poppins_400Regular',
     color: '#999999',
+    marginTop: 4,
+  },
+  navLabelActive: {
+    color: '#B39BD5',
   },
   sellButton: {
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 60,
+    marginTop: -30,
   },
-  addIcon: {
-    width: 95,
-    height: 95,
-    marginTop: -40,
+  addButtonCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#B39BD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    fontFamily: 'Poppins_600SemiBold',
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: '#B39BD5',
+    fontFamily: 'Poppins_600SemiBold',
+  },
+  horizontalList: {
+    paddingHorizontal: 12,
+  },
+  horizontalCard: {
+    width: 160,
+    marginHorizontal: 8,
   },
 });
