@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Axis Mobile App",
+    "slug": "axis-mobile-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.axis.mobileapp"
+    },
+    "android": {
+      "package": "com.axis.mobileapp"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
