@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ListingCard from '../components/explore/ListingCard';
@@ -27,7 +27,7 @@ const RECENTLY_LISTED = [
   { id: '12', title: 'Wireless Mouse', price: 18, condition: 'Like New', category: 'Electronics' },
 ];
 
-export default function MainHomeScreen({ firstName }) {
+export default function MainHomeScreen({ firstName, onLogout }) {
   const [searchText, setSearchText] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -71,6 +71,43 @@ export default function MainHomeScreen({ firstName }) {
     setFilters({ ...filters, category });
   };
   
+  // Filter function to apply filters to items
+  const filterItems = (items) => {
+    return items.filter(item => {
+      // Category filter
+      if (filters.category !== 'All' && item.category !== filters.category) {
+        return false;
+      }
+      
+      // Condition filter
+      if (filters.condition !== 'All' && item.condition !== filters.condition) {
+        return false;
+      }
+      
+      // Price range filter
+      if (item.price < filters.minPrice || item.price > filters.maxPrice) {
+        return false;
+      }
+      
+      // Search text filter
+      if (searchText.trim() !== '') {
+        const searchLower = searchText.toLowerCase();
+        const titleMatch = item.title.toLowerCase().includes(searchLower);
+        const categoryMatch = item.category.toLowerCase().includes(searchLower);
+        if (!titleMatch && !categoryMatch) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  };
+  
+  // Apply filters to each section using useMemo for performance
+  const filteredForYou = useMemo(() => filterItems(FOR_YOU_ITEMS), [filters, searchText]);
+  const filteredTrending = useMemo(() => filterItems(TRENDING_ITEMS), [filters, searchText]);
+  const filteredRecentlyListed = useMemo(() => filterItems(RECENTLY_LISTED), [filters, searchText]);
+  
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -88,8 +125,11 @@ export default function MainHomeScreen({ firstName }) {
         
         {/* Placing header in overlay section */}
         <View style={styles.headerOverlay}>
-          {/* Icon for Profile */}
-          <TouchableOpacity style={styles.iconContainer}>
+          {/* Icon for Profile - Tap to logout */}
+          <TouchableOpacity 
+            style={styles.iconContainer}
+            onPress={onLogout}
+          >
             <Image 
               source={require('../images/profile_icon.png')}
               style={styles.profileIcon}
@@ -251,61 +291,76 @@ export default function MainHomeScreen({ firstName }) {
         showsVerticalScrollIndicator={false}
       >
         {/* For You Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>For You</Text>
+        {filteredForYou.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>For You</Text>
+            </View>
+            <FlatList
+              data={filteredForYou}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.horizontalCard}>
+                  <ListingCard listing={item} />
+                </View>
+              )}
+              contentContainerStyle={styles.horizontalList}
+            />
           </View>
-          <FlatList
-            data={FOR_YOU_ITEMS}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.horizontalCard}>
-                <ListingCard listing={item} />
-              </View>
-            )}
-            contentContainerStyle={styles.horizontalList}
-          />
-        </View>
+        )}
 
         {/* Trending Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Trending</Text>
+        {filteredTrending.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Trending</Text>
+            </View>
+            <FlatList
+              data={filteredTrending}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.horizontalCard}>
+                  <ListingCard listing={item} />
+                </View>
+              )}
+              contentContainerStyle={styles.horizontalList}
+            />
           </View>
-          <FlatList
-            data={TRENDING_ITEMS}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.horizontalCard}>
-                <ListingCard listing={item} />
-              </View>
-            )}
-            contentContainerStyle={styles.horizontalList}
-          />
-        </View>
+        )}
 
         {/* Recently Listed Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recently Listed</Text>
+        {filteredRecentlyListed.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recently Listed</Text>
+            </View>
+            <FlatList
+              data={filteredRecentlyListed}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.horizontalCard}>
+                  <ListingCard listing={item} />
+                </View>
+              )}
+              contentContainerStyle={styles.horizontalList}
+            />
           </View>
-          <FlatList
-            data={RECENTLY_LISTED}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.horizontalCard}>
-                <ListingCard listing={item} />
-              </View>
-            )}
-            contentContainerStyle={styles.horizontalList}
-          />
-        </View>
+        )}
+        
+        {/* No results message */}
+        {filteredForYou.length === 0 && filteredTrending.length === 0 && filteredRecentlyListed.length === 0 && (
+          <View style={styles.noResultsContainer}>
+            <Ionicons name="search-outline" size={64} color="#999999" />
+            <Text style={styles.noResultsText}>No items found</Text>
+            <Text style={styles.noResultsSubtext}>Try adjusting your filters or search terms</Text>
+          </View>
+        )}
       </ScrollView>
       
       {/* Cart Icon */}
@@ -387,7 +442,7 @@ const styles = StyleSheet.create({
     top: 185,
     left: 0,
     right: 0,
-    height: 130,
+    height: 150,
     backgroundColor: '#502E82',
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
@@ -656,5 +711,26 @@ const styles = StyleSheet.create({
   horizontalCard: {
     width: 160,
     marginHorizontal: 8,
+  },
+  noResultsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  noResultsText: {
+    fontSize: 20,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#333333',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  noResultsSubtext: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#999999',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

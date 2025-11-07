@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, Animated } from 'react-native';
+import { View, Text, Animated, ActivityIndicator } from 'react-native';
 import { useFonts, HammersmithOne_400Regular } from '@expo-google-fonts/hammersmith-one';
 import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from '@expo-google-fonts/poppins';
 import HomeScreen from './screens/HomeScreen';
@@ -7,7 +7,7 @@ import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import ProfileSetupScreen from './screens/ProfileSetupScreen';
 import MainHomeScreen from './screens/MainHomeScreen';
-import ExploreScreen from './screens/ExploreScreen';
+import { getCurrentSession, getCurrentUser, getUserProfile, signUp, signOut } from './services/authService';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
@@ -20,7 +20,9 @@ export default function App() {
   const [yearOfStudy, setYearOfStudy] = useState('');
   const [socials, setSocials] = useState('');
   const [aboutYou, setAboutYou] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
   
@@ -30,6 +32,39 @@ export default function App() {
     Poppins_500Medium,
     Poppins_600SemiBold,
   });
+
+  // Check for existing session on app load
+  useEffect(() => {
+    checkUserSession();
+  }, []);
+
+  const checkUserSession = async () => {
+    try {
+      const { session } = await getCurrentSession();
+      
+      if (session?.user) {
+        const { user: currentUser } = await getCurrentUser();
+        setUser(currentUser);
+        
+        // Fetch user profile
+        const { profile } = await getUserProfile(currentUser.id);
+        if (profile) {
+          setUserProfile(profile);
+          setFirstName(profile.first_name || '');
+          setLastName(profile.last_name || '');
+          setEmail(profile.email || '');
+          setProgram(profile.program || '');
+          setYearOfStudy(profile.year_of_study || '');
+          setAboutYou(profile.bio || '');
+          setCurrentScreen('mainhome');
+        }
+      }
+    } catch (error) {
+      console.error('Session check error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (currentScreen === 'signin' || currentScreen === 'signup' || currentScreen === 'profileSetup') {
@@ -127,38 +162,87 @@ export default function App() {
     });
   };
 
-  const handleProfileComplete = () => {
+  const handleProfileComplete = async () => {
+    // Create account with Supabase if user doesn't exist yet
+    if (!user) {
+      setIsLoading(true);
+      try {
+        const { user: newUser, error } = await signUp(email, password, {
+          firstName,
+          lastName,
+          program,
+          yearOfStudy,
+          bio: aboutYou,
+          phoneNumber: socials,
+        });
+
+        if (error) {
+          console.error('Signup error:', error);
+          
+          // Handle specific error cases
+          if (error.code === 'user_already_exists') {
+            alert('This email is already registered. Please sign in instead.');
+          } else if (error.message?.includes('already registered')) {
+            alert('This email is already registered. Please sign in instead.');
+          } else {
+            alert(error.message || 'Failed to create account. Please try again.');
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+
+        if (!newUser) {
+          alert('Failed to create account. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+
+        setUser(newUser);
+        // Profile is created/updated in signUp function
+      } catch (error) {
+        console.error('Signup error:', error);
+        alert('An error occurred during signup. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(false);
+    }
+    
     // Navigate to main home screen after profile setup
     navigateToMainHome();
   };
 
-  const navigateToExplore = (category = 'All') => {
-    setSelectedCategory(category);
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentScreen('explore');
-      fadeAnim.setValue(1);
-    });
+  const handleAuthSuccess = (userData, profileData) => {
+    setUser(userData);
+    setUserProfile(profileData);
   };
 
-  const navigateBackToMainHome = () => {
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentScreen('mainhome');
-      fadeAnim.setValue(1);
-    });
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      setUser(null);
+      setUserProfile(null);
+      setEmail('');
+      setPassword('');
+      setFirstName('');
+      setLastName('');
+      setConfirmPassword('');
+      setProgram('');
+      setYearOfStudy('');
+      setSocials('');
+      setAboutYou('');
+      setCurrentScreen('home');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Loading...</Text>
+        <ActivityIndicator size="large" color="#4b307d" />
+        <Text style={{ marginTop: 10, fontFamily: 'Poppins_400Regular', color: '#4b307d' }}>Loading...</Text>
       </View>
     );
   }
@@ -195,6 +279,7 @@ export default function App() {
         setPassword={setPassword}
         onBack={navigateToHome}
         onSignIn={navigateToMainHome}
+        onAuthSuccess={handleAuthSuccess}
       />
     );
   } else if (currentScreen === 'signup') {
@@ -214,6 +299,7 @@ export default function App() {
         setConfirmPassword={setConfirmPassword}
         onBack={navigateToHome}
         onContinue={navigateToProfileSetup}
+        onAuthSuccess={handleAuthSuccess}
       />
     );
   } else if (currentScreen === 'profileSetup') {
@@ -230,13 +316,25 @@ export default function App() {
         setSocials={setSocials}
         aboutYou={aboutYou}
         setAboutYou={setAboutYou}
+        user={user}
         onBack={navigateBackToSignUp}
         onContinue={handleProfileComplete}
       />
     );
   } else if (currentScreen === 'mainhome') {
-    return <MainHomeScreen firstName={firstName} onNavigateToExplore={navigateToExplore} />;
-  } else if (currentScreen === 'explore') {
-    return <ExploreScreen onBack={navigateBackToMainHome} initialCategory={selectedCategory} />;
+    // Only render MainHomeScreen if user is authenticated
+    if (!user) {
+      // User is not authenticated, redirect to home
+      setCurrentScreen('home');
+      return (
+        <HomeScreen 
+          fadeAnim={fadeAnim}
+          homeTranslateX={homeTranslateX}
+          onSignIn={navigateToSignIn}
+          onSignUp={navigateToSignUp}
+        />
+      );
+    }
+    return <MainHomeScreen firstName={firstName} onLogout={handleLogout} />;
   }
 }
