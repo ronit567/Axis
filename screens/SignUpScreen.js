@@ -1,5 +1,8 @@
-import React from 'react';
-import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated, ActivityIndicator } from 'react-native';
+import { isValidSchoolEmail, checkEmailExists } from '../services/authService';
+import EmailValidationModal from '../components/EmailValidationModal';
+import ErrorModal from '../components/ErrorModal';
 
 export default function SignUpScreen({ 
   fadeAnim, 
@@ -15,8 +18,90 @@ export default function SignUpScreen({
   confirmPassword,
   setConfirmPassword,
   onBack,
-  onContinue
+  onContinue,
+  onAuthSuccess
 }) {
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleContinue = async () => {
+    // Validate all fields
+    if (!firstName.trim()) {
+      setErrorMessage('Please enter your first name');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!lastName.trim()) {
+      setErrorMessage('Please enter your last name');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!email.trim()) {
+      setErrorMessage('Please enter your email address');
+      setShowErrorModal(true);
+      return;
+    }
+
+    // Validate email domain
+    if (!isValidSchoolEmail(email)) {
+      setShowEmailModal(true);
+      return;
+    }
+
+    if (!password) {
+      setErrorMessage('Please enter a password');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match');
+      setShowErrorModal(true);
+      return;
+    }
+
+    // Check if email already exists
+    setIsLoading(true);
+    const { exists, error: checkError } = await checkEmailExists(email);
+    setIsLoading(false);
+
+    if (checkError) {
+      setErrorMessage('Unable to verify email. Please try again.');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (exists) {
+      setErrorMessage('An account with this email already exists. Please sign in instead.');
+      setShowErrorModal(true);
+      return;
+    }
+
+    // All validations passed, proceed to profile setup
+    onContinue();
+  };
+
+  const handleBack = () => {
+    // Clear sensitive data and reset state before going back
+    setPassword('');
+    setConfirmPassword('');
+    setIsLoading(false);
+    setShowErrorModal(false);
+    setShowEmailModal(false);
+    setErrorMessage('');
+    onBack();
+  };
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim, transform: [{ translateX: signInTranslateX }] }]}>
       <KeyboardAvoidingView 
@@ -112,22 +197,41 @@ export default function SignUpScreen({
             <View style={styles.buttonRow}>
               <TouchableOpacity 
                 style={styles.signUpBackButton}
-                onPress={onBack}
+                onPress={handleBack}
+                disabled={isLoading}
               >
                 <Text style={styles.backButtonText}>‹  Back</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.signUpContinueButton}
-                onPress={onContinue}
+                style={[styles.signUpContinueButton, isLoading && styles.buttonDisabled]}
+                onPress={handleContinue}
                 activeOpacity={0.7}
+                disabled={isLoading}
               >
-                <Text style={styles.continueButtonText}>Continue</Text>
+                {isLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.continueButtonText}>Continue</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      <EmailValidationModal 
+        visible={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        email={email}
+      />
+      
+      <ErrorModal 
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        title="Validation Error"
+        message={errorMessage}
+      />
     </Animated.View>
   );
 }
@@ -240,5 +344,8 @@ const styles = StyleSheet.create({
     color: '#4b307d',
     fontSize: 16,
     fontFamily: 'Poppins_500Medium',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });

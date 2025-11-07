@@ -1,91 +1,89 @@
-import React, { useState, useRef } from 'react';
-import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import ListingCard from '../components/explore/ListingCard';
-import FilterModal from '../components/explore/FilterModal';
-import ActiveFilters from '../components/explore/ActiveFilters';
-
-// Dummy data for home page sections
-const FOR_YOU_ITEMS = [
-  { id: '1', title: 'Calculus Textbook', price: 45, condition: 'Like New', category: 'Books' },
-  { id: '2', title: 'Desk Lamp', price: 20, condition: 'Good', category: 'Furniture' },
-  { id: '3', title: 'Winter Jacket', price: 60, condition: 'Like New', category: 'Clothing' },
-  { id: '4', title: 'Laptop Stand', price: 35, condition: 'Fair', category: 'Electronics' },
-];
-
-const TRENDING_ITEMS = [
-  { id: '5', title: 'Biology Notes', price: 15, condition: 'Good', category: 'Books' },
-  { id: '6', title: 'Mini Fridge', price: 80, condition: 'Like New', category: 'Appliances' },
-  { id: '7', title: 'Graphing Calculator', price: 50, condition: 'Like New', category: 'Electronics' },
-  { id: '8', title: 'Office Chair', price: 70, condition: 'Fair', category: 'Furniture' },
-];
-
-const RECENTLY_LISTED = [
-  { id: '9', title: 'Physics Textbook', price: 55, condition: 'Good', category: 'Books' },
-  { id: '10', title: 'Desk Organizer', price: 12, condition: 'Like New', category: 'Furniture' },
-  { id: '11', title: 'Backpack', price: 30, condition: 'Good', category: 'Clothing' },
-  { id: '12', title: 'Wireless Mouse', price: 18, condition: 'Like New', category: 'Electronics' },
-];
+import React, { useRef, useState, useMemo } from 'react';
+import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, Animated, FlatList, Modal } from 'react-native';
 
 export default function MainHomeScreen({ firstName }) {
   const [searchText, setSearchText] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    category: 'All',
-    condition: 'All',
-    minPrice: 0,
-    maxPrice: 100,
-  });
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
+  const baseCategories = [];
+  const expandedCategories = ['Electronics', 'Books', 'Furniture', 'Custom'];
+  const expandAnim = useRef(new Animated.Value(0)).current; // 0: collapsed, 1: expanded
   
+  // Filter state
+  const [showFilter, setShowFilter] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCondition, setSelectedCondition] = useState('All');
+  const [selectedLocation, setSelectedLocation] = useState('All');
+  const [minPrice, setMinPrice] = useState(0);
+  const [maxPrice, setMaxPrice] = useState(100);
+  const filterSlideAnim = useRef(new Animated.Value(0)).current; // 0: hidden, 1: visible
+
+  // Placeholder products
+  const allProducts = [
+    { id: '1', title: 'Calculus Textbook', condition: 'Like New', category: 'Books', location: 'North Campus', price: 45 },
+    { id: '2', title: 'Desk Lamp', condition: 'Good', category: 'Furniture', location: 'South Campus', price: 20 },
+    { id: '3', title: 'Winter Jacket', condition: 'Like New', category: 'Clothing', location: 'East Campus', price: 60 },
+    { id: '4', title: 'Laptop Stand', condition: 'Fair', category: 'Furniture', location: 'North Campus', price: 35 },
+    { id: '5', title: 'Keyboard', condition: 'Good', category: 'Electronics', location: 'West Campus', price: 25 },
+    { id: '6', title: 'Chemistry Notes', condition: 'Good', category: 'Books', location: 'South Campus', price: 10 },
+    { id: '7', title: 'Headphones', condition: 'Like New', category: 'Electronics', location: 'North Campus', price: 70 },
+    { id: '8', title: 'Backpack', condition: 'Good', category: 'Other', location: 'East Campus', price: 30 },
+    { id: '9', title: 'Graphing Calculator', condition: 'Good', category: 'Electronics', location: 'West Campus', price: 50 },
+    { id: '10', title: 'Bluetooth Speaker', condition: 'Like New', category: 'Electronics', location: 'North Campus', price: 40 },
+    { id: '11', title: 'Notebook Bundle', condition: 'New', category: 'Books', location: 'South Campus', price: 15 },
+    { id: '12', title: 'Water Bottle', condition: 'Good', category: 'Other', location: 'East Campus', price: 8 },
+    { id: '13', title: 'Dorm Lamp', condition: 'Fair', category: 'Furniture', location: 'West Campus', price: 12 },
+    { id: '14', title: 'Hoodie', condition: 'Like New', category: 'Clothing', location: 'North Campus', price: 22 },
+    { id: '15', title: 'Bike Lock', condition: 'Good', category: 'Other', location: 'South Campus', price: 18 },
+  ];
   
-  const handlePinkCirclePress = () => {
-    const toValue = isExpanded ? 0 : 1;
-    setIsExpanded(!isExpanded);
-    
-    Animated.spring(slideAnim, {
-      toValue,
+  // Filtered products
+  const products = useMemo(() => {
+    return allProducts.filter(item => {
+      const matchCategory = selectedCategory === 'All' || item.category === selectedCategory;
+      const matchCondition = selectedCondition === 'All' || item.condition === selectedCondition;
+      const matchLocation = selectedLocation === 'All' || item.location === selectedLocation;
+      const matchPrice = item.price >= minPrice && item.price <= maxPrice;
+      return matchCategory && matchCondition && matchLocation && matchPrice;
+    });
+  }, [selectedCategory, selectedCondition, selectedLocation, minPrice, maxPrice]);
+
+  const toggleCategories = () => {
+    const toVal = categoriesExpanded ? 0 : 1;
+    Animated.timing(expandAnim, {
+      toValue: toVal,
+      duration: 280,
+      useNativeDriver: false, // animating width/margins
+    }).start(() => setCategoriesExpanded(!categoriesExpanded));
+  };
+  
+  const openFilter = () => {
+    setShowFilter(true);
+    Animated.timing(filterSlideAnim, {
+      toValue: 1,
+      duration: 300,
       useNativeDriver: true,
-      friction: 8,
-      tension: 40,
     }).start();
   };
   
-  const activeFilterCount = [
-    filters.category !== 'All',
-    filters.condition !== 'All',
-    filters.minPrice > 0 || filters.maxPrice < 100,
-  ].filter(Boolean).length;
+  const closeFilter = () => {
+    Animated.timing(filterSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => setShowFilter(false));
+  };
+  
+  const applyFilters = () => {
+    closeFilter();
+  };
   
   const resetFilters = () => {
-    setFilters({
-      category: 'All',
-      condition: 'All',
-      minPrice: 0,
-      maxPrice: 100,
-    });
+    setSelectedCategory('All');
+    setSelectedCondition('All');
+    setSelectedLocation('All');
+    setMinPrice(0);
+    setMaxPrice(100);
   };
-  
-  const handleCategoryFilterPress = (category) => {
-    setFilters({ ...filters, category });
-  };
-  
-  // Filter function
-  const filterItems = (items) => {
-    return items.filter(item => {
-      const matchesSearch = item.title.toLowerCase().includes(searchText.toLowerCase());
-      const matchesCategory = filters.category === 'All' || item.category === filters.category;
-      const matchesCondition = filters.condition === 'All' || item.condition === filters.condition;
-      const matchesPrice = item.price >= filters.minPrice && item.price <= filters.maxPrice;
-      return matchesSearch && matchesCategory && matchesCondition && matchesPrice;
-    });
-  };
-  
-  // Apply filters to each section
-  const filteredForYou = filterItems(FOR_YOU_ITEMS);
-  const filteredTrending = filterItems(TRENDING_ITEMS);
-  const filteredRecentlyListed = filterItems(RECENTLY_LISTED);
   
   return (
     <View style={styles.container}>
@@ -129,215 +127,102 @@ export default function MainHomeScreen({ firstName }) {
           </TouchableOpacity>
         </View>
         
-        {/* Search Bar with Filter Button */}
-        <View style={styles.searchRow}>
-          <View style={styles.searchBarContainer}>
-            <Image 
-              source={require('../images/search_icon.png')}
-              style={styles.searchIcon}
-              resizeMode="contain"
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search here"
-              placeholderTextColor="#999999"
-              value={searchText}
-              onChangeText={setSearchText}
-            />
-          </View>
-          
-          {/* Filter Button */}
-          <Pressable 
-            style={styles.filterButton}
-            onPress={() => setShowFilters(true)}
-          >
-            <Text style={styles.filterIcon}>☰</Text>
-            {activeFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </Pressable>
+        {/* Search Bar */}
+        <View style={styles.searchBarContainer}>
+          <Image 
+            source={require('../images/search_icon.png')}
+            style={styles.searchIcon}
+            resizeMode="contain"
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search here"
+            placeholderTextColor="#999999"
+            value={searchText}
+            onChangeText={setSearchText}
+          />
         </View>
-        
-        {/* Active Filters Display */}
-        {activeFilterCount > 0 && (
-          <View style={styles.filtersRow}>
-            <ActiveFilters
-              filters={filters}
-              onUpdateFilters={setFilters}
-              onResetFilters={resetFilters}
-            />
-          </View>
-        )}
       </View>
       {/* Category Circles */}
-      <View style={[
-        styles.categoriesContainer,
-        activeFilterCount > 0 && styles.categoriesContainerWithFilters
-      ]}>
-        {/* Pink Circle - Main button */}
-        <TouchableOpacity style={styles.categoryCircleFirst} onPress={handlePinkCirclePress} activeOpacity={1}>
-          <Ionicons name="menu" size={28} color="#FFFFFF" />
-        </TouchableOpacity>
-        
-        {/* Animated sliding circles */}
-        <Animated.View style={[
-          styles.slidingCircle,
-          {
-            transform: [
-              {
-                translateX: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-72, 0],
-                }),
-              },
-            ],
-            opacity: slideAnim,
-          },
-        ]}>
-          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Books')}>
-            <Ionicons name="book-outline" size={28} color="#502E82" />
-          </TouchableOpacity>
-        </Animated.View>
-        
-        <Animated.View style={[
-          styles.slidingCircle,
-          {
-            transform: [
-              {
-                translateX: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-72, 0],
-                }),
-              },
-            ],
-            opacity: slideAnim,
-          },
-        ]}>
-          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Electronics')}>
-            <Ionicons name="laptop-outline" size={28} color="#502E82" />
-          </TouchableOpacity>
-        </Animated.View>
-        
-        <Animated.View style={[
-          styles.slidingCircle,
-          {
-            transform: [
-              {
-                translateX: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-72, 0],
-                }),
-              },
-            ],
-            opacity: slideAnim,
-          },
-        ]}>
-          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Furniture')}>
-            <MaterialCommunityIcons name="bed-outline" size={28} color="#502E82" />
-          </TouchableOpacity>
-        </Animated.View>
-        
-        <Animated.View style={[
-          styles.slidingCircle,
-          {
-            transform: [
-              {
-                translateX: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-72, 0],
-                }),
-              },
-            ],
-            opacity: slideAnim,
-          },
-        ]}>
-          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Clothing')}>
-            <Ionicons name="shirt-outline" size={28} color="#502E82" />
-          </TouchableOpacity>
-        </Animated.View>
+      <View style={styles.categoriesContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoriesRow}
+        >
+          <View style={styles.categoryItem}>
+            <TouchableOpacity
+              style={styles.categoryCircleFirst}
+              onPress={toggleCategories}
+              activeOpacity={0.8}
+            >
+              <Image 
+                source={require('../images/all_icon.png')}
+                style={styles.categoryIcon}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+            <Text style={styles.categoryLabel}>All</Text>
+          </View>
+
+          {(() => {
+            const totalWidth = expandedCategories.length * (60 + 12);
+            const maskWidth = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, totalWidth] });
+            return (
+              <Animated.View style={[styles.categoryMask, { width: maskWidth }]}> 
+                <View style={styles.categoryRowInner}>
+                  {expandedCategories.map((label, idx) => {
+                    const translateX = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [-(idx + 1) * 12, 0] });
+                    const opacity = expandAnim;
+                    const scale = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] });
+                    const isCustom = label === 'Custom';
+                    return (
+                      <Animated.View key={`${label}-${idx}`} style={[styles.categoryItemFixed, { transform: [{ translateX }, { scale }], opacity }]}> 
+                        <TouchableOpacity 
+                          style={styles.categoryCircle} 
+                          activeOpacity={0.8}
+                          onPress={() => isCustom && openFilter()}
+                        />
+                        <Text style={styles.categoryLabel}>{label}</Text>
+                      </Animated.View>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+            );
+          })()}
+        </ScrollView>
       </View>
       
-      <ScrollView 
-        style={[
-          styles.content,
-          activeFilterCount > 0 && styles.contentWithFilters
-        ]} 
-        showsVerticalScrollIndicator={false}
-      >
-        {/* For You Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>For You</Text>
-          </View>
-          <FlatList
-            data={filteredForYou}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.horizontalCard}>
-                <ListingCard listing={item} />
+      {/* Product Grid */}
+      <View style={styles.content}>
+        <FlatList
+          data={products}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.gridRow}
+          contentContainerStyle={styles.gridContainer}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardImagePlaceholder}>
+                <View style={styles.imageIconStub} />
               </View>
-            )}
-            contentContainerStyle={styles.horizontalList}
-            ListEmptyComponent={
-              <View style={styles.emptySection}>
-                <Text style={styles.emptySectionText}>No items found</Text>
+              <View style={styles.cardBody}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <View style={styles.conditionRow}>
+                  <View style={styles.tagStub} />
+                  <Text style={styles.conditionText}>{item.condition}</Text>
+                </View>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceText}>${item.price}</Text>
+                  <View style={styles.pinCircle} />
+                </View>
               </View>
-            }
-          />
-        </View>
-
-        {/* Trending Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Trending</Text>
-          </View>
-          <FlatList
-            data={filteredTrending}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.horizontalCard}>
-                <ListingCard listing={item} />
-              </View>
-            )}
-            contentContainerStyle={styles.horizontalList}
-            ListEmptyComponent={
-              <View style={styles.emptySection}>
-                <Text style={styles.emptySectionText}>No items found</Text>
-              </View>
-            }
-          />
-        </View>
-
-        {/* Recently Listed Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recently Listed</Text>
-          </View>
-          <FlatList
-            data={filteredRecentlyListed}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.horizontalCard}>
-                <ListingCard listing={item} />
-              </View>
-            )}
-            contentContainerStyle={styles.horizontalList}
-            ListEmptyComponent={
-              <View style={styles.emptySection}>
-                <Text style={styles.emptySectionText}>No items found</Text>
-              </View>
-            }
-          />
-        </View>
-      </ScrollView>
+            </View>
+          )}
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
       
       {/* Cart Icon */}
       <TouchableOpacity style={styles.cartButton}>
@@ -385,6 +270,134 @@ export default function MainHomeScreen({ firstName }) {
           <Text style={styles.navLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
+      
+      {/* Filter Modal */}
+      {showFilter && (
+        <Modal
+          transparent
+          visible={showFilter}
+          animationType="none"
+          onRequestClose={closeFilter}
+        >
+          <View style={styles.modalContainer}>
+            <TouchableOpacity 
+              style={styles.modalOverlay} 
+              activeOpacity={1}
+              onPress={closeFilter}
+            />
+            <Animated.View 
+              style={[
+                styles.filterPanel,
+                {
+                  transform: [{
+                    translateY: filterSlideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [700, 0],
+                    }),
+                  }],
+                },
+              ]}
+            >
+              <View style={styles.filterHeader}>
+                <Text style={styles.filterTitle}>Filters</Text>
+                <TouchableOpacity onPress={closeFilter}>
+                  <Text style={styles.closeButton}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView style={styles.filterContent} showsVerticalScrollIndicator={false}>
+                {/* Category Section */}
+                <Text style={styles.sectionTitle}>Category</Text>
+                <View style={styles.filterRow}>
+                  {['All', 'Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'].map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[
+                        styles.filterChip,
+                        selectedCategory === cat && styles.filterChipActive,
+                      ]}
+                      onPress={() => setSelectedCategory(cat)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          selectedCategory === cat && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                {/* Condition Section */}
+                <Text style={styles.sectionTitle}>Condition</Text>
+                <View style={styles.filterRow}>
+                  {['All', 'Like New', 'Good', 'Fair'].map((cond) => (
+                    <TouchableOpacity
+                      key={cond}
+                      style={[
+                        styles.filterChip,
+                        selectedCondition === cond && styles.filterChipActive,
+                      ]}
+                      onPress={() => setSelectedCondition(cond)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          selectedCondition === cond && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {cond}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                {/* Location Section */}
+                <Text style={styles.sectionTitle}>Location</Text>
+                <View style={styles.filterRow}>
+                  {['All', 'North Campus', 'South Campus', 'East Campus', 'West Campus'].map((loc) => (
+                    <TouchableOpacity
+                      key={loc}
+                      style={[
+                        styles.filterChip,
+                        selectedLocation === loc && styles.filterChipActive,
+                      ]}
+                      onPress={() => setSelectedLocation(loc)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          selectedLocation === loc && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {loc}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                {/* Price Range Section */}
+                <Text style={styles.sectionTitle}>Price Range</Text>
+                <View style={styles.priceRange}>
+                  <Text style={styles.priceLabel}>${minPrice}</Text>
+                  <Text style={styles.priceLabel}>${maxPrice}</Text>
+                </View>
+              </ScrollView>
+              
+              <View style={styles.filterFooter}>
+                <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
+                  <Text style={styles.resetButtonText}>Reset</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
+                  <Text style={styles.applyButtonText}>Apply Filters</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -426,13 +439,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: '#ECECEC',
-    marginTop: 210,
-    paddingTop: 60,
-    paddingBottom: 100,
-    zIndex: 0,
-  },
-  contentWithFilters: {
-    paddingTop: 150,
+    marginTop: 320,
   },
   headerOverlay: {
     position: 'absolute',
@@ -562,6 +569,22 @@ const styles = StyleSheet.create({
     left: 20,
     right: 0,
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    zIndex: 2,
+  },
+  categoriesRow: {
+    alignItems: 'flex-start',
+  },
+  categoryMask: {
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  categoryRowInner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  categoryItem: {
     alignItems: 'center',
     gap: 12,
     zIndex: 3,
@@ -571,6 +594,14 @@ const styles = StyleSheet.create({
   },
   slidingCircle: {
     marginLeft: 0,
+  },
+  categoryItemFixed: {
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  categoryItemAnimated: {
+    alignItems: 'center',
+    overflow: 'hidden',
   },
   categoryCircleFirst: {
     width: 60,
@@ -618,6 +649,83 @@ const styles = StyleSheet.create({
   cartIcon: {
     width: 35,
     height: 35,
+  },
+  // Product grid styles
+  gridContainer: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 140, // room for bottom nav
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    width: '48%',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  cardImagePlaceholder: {
+    height: 110,
+    backgroundColor: '#E6E6E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageIconStub: {
+    width: 46,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#CFCFCF',
+  },
+  cardBody: {
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  cardTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#1A1A1A',
+    marginBottom: 6,
+  },
+  conditionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tagStub: {
+    width: 16,
+    height: 12,
+    borderRadius: 2,
+    backgroundColor: '#CFCFCF',
+    marginRight: 6,
+  },
+  conditionText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: '#6B6B6B',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  priceText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: '#4b307d',
+  },
+  pinCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#E5DAF8',
   },
   bottomNav: {
     position: 'absolute',
@@ -698,5 +806,116 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     fontFamily: 'Poppins_400Regular',
+  },
+  // Filter modal styles
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  filterPanel: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    paddingBottom: 20,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  filterTitle: {
+    fontSize: 22,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#1A1A1A',
+  },
+  closeButton: {
+    fontSize: 28,
+    color: '#1A1A1A',
+    fontWeight: '300',
+  },
+  filterContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#1A1A1A',
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  filterChip: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  filterChipActive: {
+    backgroundColor: '#6B4FA0',
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#666666',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  priceRange: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  priceLabel: {
+    fontSize: 18,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#6B4FA0',
+  },
+  filterFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    gap: 12,
+  },
+  resetButton: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  resetButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
+    color: '#666666',
+  },
+  applyButton: {
+    flex: 2,
+    backgroundColor: '#6B4FA0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
+    color: '#FFFFFF',
   },
 });
