@@ -95,11 +95,6 @@ export default function MainHomeScreen({ firstName }) {
           resizeMode="stretch"
         />
         
-        {/* Purple extension when filters are active */}
-        {activeFilterCount > 0 && (
-          <View style={styles.headerExtension} />
-        )}
-        
         {/* Placing header in overlay section */}
         <View style={styles.headerOverlay}>
           {/* Icon for Profile */}
@@ -233,40 +228,49 @@ export default function MainHomeScreen({ firstName }) {
         />
       </TouchableOpacity>
       
-      {/* Filter Modal */}
-      <FilterModal
-        visible={showFilters}
-        filters={filters}
-        onClose={() => setShowFilters(false)}
-        onUpdateFilters={setFilters}
-        onResetFilters={resetFilters}
-      />
-      
       {/* Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="home" size={28} color="#B39BD5" />
-          <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
+          <Image 
+            source={require('../images/home_icon.png')}
+            style={styles.navIcon}
+            resizeMode="contain"
+          />
+          <Text style={styles.navLabel}>Home</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="search-outline" size={28} color="#999999" />
-          <Text style={styles.navLabel}>Explore</Text>
+          <Image 
+            source={require('../images/heart_icon.png')}
+            style={styles.favoritesIcon}
+            resizeMode="contain"
+          />
+          <Text style={styles.navLabel}>Favorites</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.sellButton}>
-          <View style={styles.addButtonCircle}>
-            <Ionicons name="add" size={32} color="#FFFFFF" />
-          </View>
+          <Image 
+            source={require('../images/add_icon.png')}
+            style={styles.addIcon}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="chatbubble-ellipses-outline" size={28} color="#999999" />
+          <Image 
+            source={require('../images/messages_icon.png')}
+            style={styles.navIcon}
+            resizeMode="contain"
+          />
           <Text style={styles.navLabel}>Messages</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="person-outline" size={28} color="#999999" />
+          <Image 
+            source={require('../images/profile_icon.png')}
+            style={styles.navIcon}
+            resizeMode="contain"
+          />
           <Text style={styles.navLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
@@ -413,28 +417,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     width: '100%',
-    minHeight: 295,
+    height: 310,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
-    overflow: 'visible',
+    overflow: 'hidden',
     zIndex: 1,
   },
   headerImage: {
     width: '100%',
-    height: 295,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    overflow: 'hidden',
-  },
-  headerExtension: {
-    position: 'absolute',
-    top: 185,
-    left: 0,
-    right: 0,
-    height: 130,
-    backgroundColor: '#502E82',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+    height: '100%',
   },
   content: {
     flex: 1,
@@ -484,29 +475,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginTop: -2,
   },
-  searchRow: {
+  searchBarContainer: {
     position: 'absolute',
-    top: 185,
+    top: 195,
     left: 20,
     right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    zIndex: 2,
-  },
-  searchBarContainer: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 25,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    zIndex: 2,
   },
   searchIcon: {
     width: 24,
@@ -519,54 +499,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_400Regular',
     color: '#000000',
   },
-  filterButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-    position: 'relative',
-  },
-  filterIcon: {
-    fontSize: 22,
-    color: '#B39BD5',
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: '#B39BD5',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-  },
-  filterBadgeText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: 'Poppins_600SemiBold',
-  },
-  filtersRow: {
-    position: 'absolute',
-    top: 250,
-    left: 20,
-    right: 20,
-  },
   categoriesContainer: {
     position: 'absolute',
-    top: 200,
-    left: 20,
+    top: 215,
+    left: 0,
     right: 0,
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -586,14 +522,7 @@ const styles = StyleSheet.create({
   },
   categoryItem: {
     alignItems: 'center',
-    gap: 12,
-    zIndex: 3,
-  },
-  categoriesContainerWithFilters: {
-    top: 245,
-  },
-  slidingCircle: {
-    marginLeft: 0,
+    marginRight: 12,
   },
   categoryItemFixed: {
     alignItems: 'center',
@@ -610,11 +539,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#B39BD5',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
   categoryCircle: {
     width: 60,
@@ -623,11 +547,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+  },
+  categoryIcon: {
+    width: 30,
+    height: 30,
+  },
+  categoryLabel: {
+    fontSize: 11,
+    fontFamily: 'Poppins_400Regular',
+    color: '#000000',
+    marginTop: 5,
+    textAlign: 'center',
   },
   cartButton: {
     position: 'absolute',
@@ -729,7 +659,7 @@ const styles = StyleSheet.create({
   },
   bottomNav: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 10,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -745,67 +675,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 60,
   },
+  navIcon: {
+    width: 32,
+    height: 32,
+    marginBottom: 4,
+  },
+  favoritesIcon: {
+    width: 36,
+    height: 36,
+    marginBottom: 2,
+  },
   navLabel: {
     fontSize: 12,
     fontFamily: 'Poppins_400Regular',
     color: '#999999',
-    marginTop: 4,
-  },
-  navLabelActive: {
-    color: '#B39BD5',
   },
   sellButton: {
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 60,
-    marginTop: -30,
   },
-  addButtonCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#B39BD5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-    fontFamily: 'Poppins_600SemiBold',
-  },
-  horizontalList: {
-    paddingHorizontal: 12,
-  },
-  horizontalCard: {
-    width: 160,
-    marginHorizontal: 8,
-  },
-  emptySection: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptySectionText: {
-    fontSize: 14,
-    color: '#999',
-    fontFamily: 'Poppins_400Regular',
+  addIcon: {
+    width: 95,
+    height: 95,
+    marginTop: -40,
   },
   // Filter modal styles
   modalContainer: {
