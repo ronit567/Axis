@@ -71,6 +71,22 @@ export default function MainHomeScreen({ firstName }) {
     setFilters({ ...filters, category });
   };
   
+  // Filter function
+  const filterItems = (items) => {
+    return items.filter(item => {
+      const matchesSearch = item.title.toLowerCase().includes(searchText.toLowerCase());
+      const matchesCategory = filters.category === 'All' || item.category === filters.category;
+      const matchesCondition = filters.condition === 'All' || item.condition === filters.condition;
+      const matchesPrice = item.price >= filters.minPrice && item.price <= filters.maxPrice;
+      return matchesSearch && matchesCategory && matchesCondition && matchesPrice;
+    });
+  };
+  
+  // Apply filters to each section
+  const filteredForYou = filterItems(FOR_YOU_ITEMS);
+  const filteredTrending = filterItems(TRENDING_ITEMS);
+  const filteredRecentlyListed = filterItems(RECENTLY_LISTED);
+  
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -256,7 +272,7 @@ export default function MainHomeScreen({ firstName }) {
             <Text style={styles.sectionTitle}>For You</Text>
           </View>
           <FlatList
-            data={FOR_YOU_ITEMS}
+            data={filteredForYou}
             horizontal
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.id}
@@ -266,6 +282,11 @@ export default function MainHomeScreen({ firstName }) {
               </View>
             )}
             contentContainerStyle={styles.horizontalList}
+            ListEmptyComponent={
+              <View style={styles.emptySection}>
+                <Text style={styles.emptySectionText}>No items found</Text>
+              </View>
+            }
           />
         </View>
 
@@ -275,7 +296,7 @@ export default function MainHomeScreen({ firstName }) {
             <Text style={styles.sectionTitle}>Trending</Text>
           </View>
           <FlatList
-            data={TRENDING_ITEMS}
+            data={filteredTrending}
             horizontal
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.id}
@@ -285,6 +306,11 @@ export default function MainHomeScreen({ firstName }) {
               </View>
             )}
             contentContainerStyle={styles.horizontalList}
+            ListEmptyComponent={
+              <View style={styles.emptySection}>
+                <Text style={styles.emptySectionText}>No items found</Text>
+              </View>
+            }
           />
         </View>
 
@@ -294,7 +320,7 @@ export default function MainHomeScreen({ firstName }) {
             <Text style={styles.sectionTitle}>Recently Listed</Text>
           </View>
           <FlatList
-            data={RECENTLY_LISTED}
+            data={filteredRecentlyListed}
             horizontal
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.id}
@@ -304,6 +330,11 @@ export default function MainHomeScreen({ firstName }) {
               </View>
             )}
             contentContainerStyle={styles.horizontalList}
+            ListEmptyComponent={
+              <View style={styles.emptySection}>
+                <Text style={styles.emptySectionText}>No items found</Text>
+              </View>
+            }
           />
         </View>
       </ScrollView>
@@ -656,5 +687,16 @@ const styles = StyleSheet.create({
   horizontalCard: {
     width: 160,
     marginHorizontal: 8,
+  },
+  emptySection: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptySectionText: {
+    fontSize: 14,
+    color: '#999',
+    fontFamily: 'Poppins_400Regular',
   },
 });
