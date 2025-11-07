@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ListingCard from '../components/explore/ListingCard';
+import FilterModal from '../components/explore/FilterModal';
+import ActiveFilters from '../components/explore/ActiveFilters';
 
 // Dummy data for home page sections
 const FOR_YOU_ITEMS = [
@@ -25,13 +27,48 @@ const RECENTLY_LISTED = [
   { id: '12', title: 'Wireless Mouse', price: 18, condition: 'Like New', category: 'Electronics' },
 ];
 
-export default function MainHomeScreen({ firstName, onNavigateToExplore }) {
+export default function MainHomeScreen({ firstName }) {
   const [searchText, setSearchText] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    category: 'All',
+    condition: 'All',
+    minPrice: 0,
+    maxPrice: 100,
+  });
   
-  const handleCategoryPress = (category) => {
-    if (onNavigateToExplore) {
-      onNavigateToExplore(category);
-    }
+  
+  const handlePinkCirclePress = () => {
+    const toValue = isExpanded ? 0 : 1;
+    setIsExpanded(!isExpanded);
+    
+    Animated.spring(slideAnim, {
+      toValue,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 40,
+    }).start();
+  };
+  
+  const activeFilterCount = [
+    filters.category !== 'All',
+    filters.condition !== 'All',
+    filters.minPrice > 0 || filters.maxPrice < 100,
+  ].filter(Boolean).length;
+  
+  const resetFilters = () => {
+    setFilters({
+      category: 'All',
+      condition: 'All',
+      minPrice: 0,
+      maxPrice: 100,
+    });
+  };
+  
+  const handleCategoryFilterPress = (category) => {
+    setFilters({ ...filters, category });
   };
   
   return (
@@ -43,6 +80,11 @@ export default function MainHomeScreen({ firstName, onNavigateToExplore }) {
           style={styles.headerImage}
           resizeMode="stretch"
         />
+        
+        {/* Purple extension when filters are active */}
+        {activeFilterCount > 0 && (
+          <View style={styles.headerExtension} />
+        )}
         
         {/* Placing header in overlay section */}
         <View style={styles.headerOverlay}>
@@ -71,53 +113,147 @@ export default function MainHomeScreen({ firstName, onNavigateToExplore }) {
           </TouchableOpacity>
         </View>
         
-        {/* Search Bar */}
-        <View style={styles.searchBarContainer}>
-          <Image 
-            source={require('../images/search_icon.png')}
-            style={styles.searchIcon}
-            resizeMode="contain"
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search here"
-            placeholderTextColor="#999999"
-            value={searchText}
-            onChangeText={setSearchText}
-          />
+        {/* Search Bar with Filter Button */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBarContainer}>
+            <Image 
+              source={require('../images/search_icon.png')}
+              style={styles.searchIcon}
+              resizeMode="contain"
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search here"
+              placeholderTextColor="#999999"
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+          </View>
+          
+          {/* Filter Button */}
+          <Pressable 
+            style={styles.filterButton}
+            onPress={() => setShowFilters(true)}
+          >
+            <Text style={styles.filterIcon}>☰</Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </Pressable>
         </View>
+        
+        {/* Active Filters Display */}
+        {activeFilterCount > 0 && (
+          <View style={styles.filtersRow}>
+            <ActiveFilters
+              filters={filters}
+              onUpdateFilters={setFilters}
+              onResetFilters={resetFilters}
+            />
+          </View>
+        )}
       </View>
       {/* Category Circles */}
-      <View style={styles.categoriesContainer}>
-        <TouchableOpacity style={styles.categoryCircleFirst} onPress={() => handleCategoryPress('All')}>
+      <View style={[
+        styles.categoriesContainer,
+        activeFilterCount > 0 && styles.categoriesContainerWithFilters
+      ]}>
+        {/* Pink Circle - Main button */}
+        <TouchableOpacity style={styles.categoryCircleFirst} onPress={handlePinkCirclePress} activeOpacity={1}>
           <Ionicons name="menu" size={28} color="#FFFFFF" />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryPress('Books')}>
-          <Ionicons name="book-outline" size={28} color="#502E82" />
-        </TouchableOpacity>
+        {/* Animated sliding circles */}
+        <Animated.View style={[
+          styles.slidingCircle,
+          {
+            transform: [
+              {
+                translateX: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-72, 0],
+                }),
+              },
+            ],
+            opacity: slideAnim,
+          },
+        ]}>
+          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Books')}>
+            <Ionicons name="book-outline" size={28} color="#502E82" />
+          </TouchableOpacity>
+        </Animated.View>
         
-        <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryPress('Electronics')}>
-          <Ionicons name="laptop-outline" size={28} color="#502E82" />
-        </TouchableOpacity>
+        <Animated.View style={[
+          styles.slidingCircle,
+          {
+            transform: [
+              {
+                translateX: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-72, 0],
+                }),
+              },
+            ],
+            opacity: slideAnim,
+          },
+        ]}>
+          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Electronics')}>
+            <Ionicons name="laptop-outline" size={28} color="#502E82" />
+          </TouchableOpacity>
+        </Animated.View>
         
-        <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryPress('Furniture')}>
-          <MaterialCommunityIcons name="bed-outline" size={28} color="#502E82" />
-        </TouchableOpacity>
+        <Animated.View style={[
+          styles.slidingCircle,
+          {
+            transform: [
+              {
+                translateX: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-72, 0],
+                }),
+              },
+            ],
+            opacity: slideAnim,
+          },
+        ]}>
+          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Furniture')}>
+            <MaterialCommunityIcons name="bed-outline" size={28} color="#502E82" />
+          </TouchableOpacity>
+        </Animated.View>
         
-        <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryPress('Clothing')}>
-          <Ionicons name="shirt-outline" size={28} color="#502E82" />
-        </TouchableOpacity>
+        <Animated.View style={[
+          styles.slidingCircle,
+          {
+            transform: [
+              {
+                translateX: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-72, 0],
+                }),
+              },
+            ],
+            opacity: slideAnim,
+          },
+        ]}>
+          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Clothing')}>
+            <Ionicons name="shirt-outline" size={28} color="#502E82" />
+          </TouchableOpacity>
+        </Animated.View>
       </View>
       
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={[
+          styles.content,
+          activeFilterCount > 0 && styles.contentWithFilters
+        ]} 
+        showsVerticalScrollIndicator={false}
+      >
         {/* For You Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>For You</Text>
-            <TouchableOpacity onPress={() => handleCategoryPress('All')}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
           </View>
           <FlatList
             data={FOR_YOU_ITEMS}
@@ -137,9 +273,6 @@ export default function MainHomeScreen({ firstName, onNavigateToExplore }) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Trending</Text>
-            <TouchableOpacity onPress={() => handleCategoryPress('All')}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
           </View>
           <FlatList
             data={TRENDING_ITEMS}
@@ -159,9 +292,6 @@ export default function MainHomeScreen({ firstName, onNavigateToExplore }) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recently Listed</Text>
-            <TouchableOpacity onPress={() => handleCategoryPress('All')}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
           </View>
           <FlatList
             data={RECENTLY_LISTED}
@@ -187,6 +317,15 @@ export default function MainHomeScreen({ firstName, onNavigateToExplore }) {
         />
       </TouchableOpacity>
       
+      {/* Filter Modal */}
+      <FilterModal
+        visible={showFilters}
+        filters={filters}
+        onClose={() => setShowFilters(false)}
+        onUpdateFilters={setFilters}
+        onResetFilters={resetFilters}
+      />
+      
       {/* Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem}>
@@ -194,7 +333,7 @@ export default function MainHomeScreen({ firstName, onNavigateToExplore }) {
           <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.navItem} onPress={() => handleCategoryPress('All')}>
+        <TouchableOpacity style={styles.navItem}>
           <Ionicons name="search-outline" size={28} color="#999999" />
           <Text style={styles.navLabel}>Explore</Text>
         </TouchableOpacity>
@@ -230,15 +369,28 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     width: '100%',
-    height: 295,
+    minHeight: 295,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
-    overflow: 'hidden',
+    overflow: 'visible',
     zIndex: 1,
   },
   headerImage: {
     width: '100%',
-    height: '100%',
+    height: 295,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    overflow: 'hidden',
+  },
+  headerExtension: {
+    position: 'absolute',
+    top: 185,
+    left: 0,
+    right: 0,
+    height: 130,
+    backgroundColor: '#502E82',
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
   },
   content: {
     flex: 1,
@@ -246,6 +398,10 @@ const styles = StyleSheet.create({
     marginTop: 210,
     paddingTop: 60,
     paddingBottom: 100,
+    zIndex: 0,
+  },
+  contentWithFilters: {
+    paddingTop: 150,
   },
   headerOverlay: {
     position: 'absolute',
@@ -290,18 +446,29 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginTop: -2,
   },
-  searchBarContainer: {
+  searchRow: {
     position: 'absolute',
     top: 185,
     left: 20,
     right: 20,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    zIndex: 2,
+  },
+  searchBarContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 25,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    zIndex: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   searchIcon: {
     width: 24,
@@ -314,17 +481,65 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_400Regular',
     color: '#000000',
   },
+  filterButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    position: 'relative',
+  },
+  filterIcon: {
+    fontSize: 22,
+    color: '#B39BD5',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#B39BD5',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  filterBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'Poppins_600SemiBold',
+  },
+  filtersRow: {
+    position: 'absolute',
+    top: 250,
+    left: 20,
+    right: 20,
+  },
   categoriesContainer: {
     position: 'absolute',
     top: 200,
-    left: 0,
+    left: 20,
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
     gap: 12,
     zIndex: 3,
+  },
+  categoriesContainerWithFilters: {
+    top: 245,
+  },
+  slidingCircle: {
+    marginLeft: 0,
   },
   categoryCircleFirst: {
     width: 60,
@@ -433,11 +648,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#333',
-    fontFamily: 'Poppins_600SemiBold',
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: '#B39BD5',
     fontFamily: 'Poppins_600SemiBold',
   },
   horizontalList: {
