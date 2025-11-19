@@ -1,8 +1,8 @@
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 
-export default function ListingCard({ listing }) {
+export default function ListingCard({ listing, onPress }) {
   return (
-    <Pressable style={styles.card}>
+    <Pressable style={styles.card} onPress={onPress}>
       <View style={styles.imagePlaceholder}>
         <Image 
           source={require('../../images/grey_circle.png')}
