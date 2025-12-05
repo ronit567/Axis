@@ -4,6 +4,9 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ListingCard from '../components/explore/ListingCard';
 import FilterModal from '../components/explore/FilterModal';
 import ActiveFilters from '../components/explore/ActiveFilters';
+import MessagesListScreen from './MessagesListScreen';
+import ItemDetailsScreen from './ItemDetailsScreen';
+import ChatScreen from './ChatScreen';
 
 // Dummy data for home page sections
 const FOR_YOU_ITEMS = [
@@ -38,6 +41,11 @@ export default function MainHomeScreen({ firstName, onLogout }) {
     minPrice: 0,
     maxPrice: 100,
   });
+  
+  // Navigation state
+  const [currentScreen, setCurrentScreen] = useState('home');
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedChat, setSelectedChat] = useState(null);
   
   
   const handlePinkCirclePress = () => {
@@ -107,6 +115,71 @@ export default function MainHomeScreen({ firstName, onLogout }) {
   const filteredForYou = useMemo(() => filterItems(FOR_YOU_ITEMS), [filters, searchText]);
   const filteredTrending = useMemo(() => filterItems(TRENDING_ITEMS), [filters, searchText]);
   const filteredRecentlyListed = useMemo(() => filterItems(RECENTLY_LISTED), [filters, searchText]);
+  
+  // Navigation handlers
+  const handleItemPress = (item) => {
+    setSelectedItem(item);
+    setCurrentScreen('itemDetails');
+  };
+  
+  const handleMessagesPress = () => {
+    setCurrentScreen('messagesList');
+  };
+  
+  const handleChatWithSeller = (item) => {
+    setSelectedItem(item);
+    setSelectedChat({
+      sellerName: 'John Doe',
+      itemTitle: item.title,
+    });
+    setCurrentScreen('chat');
+  };
+  
+  const handleChatPress = (chat) => {
+    setSelectedChat(chat);
+    setCurrentScreen('chat');
+  };
+  
+  const handleBackToHome = () => {
+    setCurrentScreen('home');
+    setSelectedItem(null);
+    setSelectedChat(null);
+  };
+  
+  const handleBackToMessages = () => {
+    setCurrentScreen('messagesList');
+    setSelectedChat(null);
+  };
+  
+  // Render different screens based on navigation state
+  if (currentScreen === 'messagesList') {
+    return (
+      <MessagesListScreen 
+        onBack={handleBackToHome}
+        onChatPress={handleChatPress}
+      />
+    );
+  }
+  
+  if (currentScreen === 'itemDetails' && selectedItem) {
+    return (
+      <ItemDetailsScreen 
+        item={selectedItem}
+        onBack={handleBackToHome}
+        onChatWithSeller={handleChatWithSeller}
+      />
+    );
+  }
+  
+  if (currentScreen === 'chat') {
+    return (
+      <ChatScreen 
+        chat={selectedChat}
+        item={selectedItem}
+        onBack={selectedItem ? handleBackToHome : handleBackToMessages}
+      />
+    );
+  }
   
   return (
     <View style={styles.container}>
@@ -303,7 +376,7 @@ export default function MainHomeScreen({ firstName, onLogout }) {
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <View style={styles.horizontalCard}>
-                  <ListingCard listing={item} />
+                  <ListingCard listing={item} onPress={() => handleItemPress(item)} />
                 </View>
               )}
               contentContainerStyle={styles.horizontalList}
@@ -324,7 +397,7 @@ export default function MainHomeScreen({ firstName, onLogout }) {
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <View style={styles.horizontalCard}>
-                  <ListingCard listing={item} />
+                  <ListingCard listing={item} onPress={() => handleItemPress(item)} />
                 </View>
               )}
               contentContainerStyle={styles.horizontalList}
@@ -345,7 +418,7 @@ export default function MainHomeScreen({ firstName, onLogout }) {
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <View style={styles.horizontalCard}>
-                  <ListingCard listing={item} />
+                  <ListingCard listing={item} onPress={() => handleItemPress(item)} />
                 </View>
               )}
               contentContainerStyle={styles.horizontalList}
@@ -399,7 +472,7 @@ export default function MainHomeScreen({ firstName, onLogout }) {
           </View>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem} onPress={handleMessagesPress}>
           <Ionicons name="chatbubble-ellipses-outline" size={28} color="#999999" />
           <Text style={styles.navLabel}>Messages</Text>
         </TouchableOpacity>
