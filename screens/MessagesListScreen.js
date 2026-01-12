@@ -1,159 +1,251 @@
-import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, Image, TextInput, Animated } from 'react-native';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, Image, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-// Dummy chat data - will be replaced with real data later
-const DUMMY_CHATS = [
-  {
-    id: '1',
-    sellerName: 'John Smith',
-    itemTitle: 'Calculus Textbook',
-    itemPrice: 45,
-    lastMessage: 'Is this still available?',
-    timestamp: '2m ago',
-    unread: true,
-    unreadCount: 2,
-    isOnline: true,
-    type: 'buying', // buying or selling
-  },
-  {
-    id: '2',
-    sellerName: 'Sarah Johnson',
-    itemTitle: 'Desk Lamp',
-    itemPrice: 20,
-    lastMessage: 'Sure, I can meet tomorrow at the library',
-    timestamp: '1h ago',
-    unread: false,
-    unreadCount: 0,
-    isOnline: false,
-    type: 'selling',
-  },
-  {
-    id: '3',
-    sellerName: 'Mike Chen',
-    itemTitle: 'Winter Jacket',
-    itemPrice: 60,
-    lastMessage: 'Thanks for your interest! Is $55 okay?',
-    timestamp: '3h ago',
-    unread: false,
-    unreadCount: 0,
-    isOnline: true,
-    type: 'buying',
-  },
-  {
-    id: '4',
-    sellerName: 'Emily Davis',
-    itemTitle: 'Laptop Stand',
-    itemPrice: 35,
-    lastMessage: 'Perfect, see you then!',
-    timestamp: 'Yesterday',
-    unread: false,
-    unreadCount: 0,
-    isOnline: false,
-    type: 'selling',
-  },
-];
+import { getConversations, subscribeToConversations, unsubscribe } from '../services/messagingService';
 
 const TABS = ['All', 'Buying', 'Selling'];
 
-export default function MessagesListScreen({ onBack, onChatPress }) {
+export default function MessagesListScreen({ onBack, onChatPress, userId }) {
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState('All');
-  
+  const [conversations, setConversations] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Fetch conversations
+  const fetchConversations = useCallback(async () => {
+    try {
+      const { conversations: data } = await getConversations();
+      setConversations(data || []);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  // Initial fetch and real-time subscription
+  useEffect(() => {
+    fetchConversations();
+
+    // Subscribe to conversation updates
+    const subscription = subscribeToConversations((eventType, newData, oldData) => {
+      if (eventType === 'INSERT') {
+        // New conversation - refetch to get full data with profiles
+        fetchConversations();
+      } else if (eventType === 'UPDATE') {
+        // Update existing conversation
+        setConversations(prev =>
+          prev.map(conv => conv.id === newData.id ? { ...conv, ...newData } : conv)
+        );
+      } else if (eventType === 'DELETE') {
+        setConversations(prev => prev.filter(conv => conv.id !== oldData.id));
+      }
+    });
+
+    return () => {
+      unsubscribe(subscription);
+    };
+  }, [fetchConversations]);
+
+  // Pull to refresh
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchConversations();
+  }, [fetchConversations]);
+
+  // Format timestamp
+  const formatTimestamp = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
   // Filter chats based on search and tab
   const filteredChats = useMemo(() => {
-    return DUMMY_CHATS.filter(chat => {
+    return conversations.filter(conv => {
       // Tab filter
-      if (activeTab !== 'All' && chat.type !== activeTab.toLowerCase()) {
+      const type = conv.isBuyer ? 'buying' : 'selling';
+      if (activeTab !== 'All' && type !== activeTab.toLowerCase()) {
         return false;
       }
-      
+
       // Search filter
       if (searchText.trim() !== '') {
         const searchLower = searchText.toLowerCase();
-        const nameMatch = chat.sellerName.toLowerCase().includes(searchLower);
-        const itemMatch = chat.itemTitle.toLowerCase().includes(searchLower);
-        const messageMatch = chat.lastMessage.toLowerCase().includes(searchLower);
+        const nameMatch = conv.otherUser?.first_name?.toLowerCase().includes(searchLower) ||
+                          conv.otherUser?.last_name?.toLowerCase().includes(searchLower);
+        const itemMatch = conv.listing?.title?.toLowerCase().includes(searchLower);
+        const messageMatch = conv.last_message_text?.toLowerCase().includes(searchLower);
         if (!nameMatch && !itemMatch && !messageMatch) {
           return false;
         }
       }
-      
+
       return true;
     });
-  }, [searchText, activeTab]);
-  
-  // Count unread messages
-  const totalUnread = DUMMY_CHATS.reduce((sum, chat) => sum + chat.unreadCount, 0);
+  }, [searchText, activeTab, conversations]);
 
-  const renderChatItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.chatItem}
-      onPress={() => onChatPress(item)}
-      activeOpacity={0.7}
-    >
-      {/* Item Thumbnail */}
-      <View style={styles.thumbnailContainer}>
-        <Image 
-          source={require('../images/grey_circle.png')}
-          style={styles.itemThumbnail}
-          resizeMode="cover"
-        />
-        <View style={styles.priceTag}>
-          <Text style={styles.priceTagText}>${item.itemPrice}</Text>
+  // Count conversations by type
+  const buyingCount = conversations.filter(c => c.isBuyer).length;
+  const sellingCount = conversations.filter(c => !c.isBuyer).length;
+
+  // Count unread messages by type
+  const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
+  const buyingUnread = conversations.filter(c => c.isBuyer).reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
+  const sellingUnread = conversations.filter(c => !c.isBuyer).reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
+
+  const getTabBadgeCount = (tab) => {
+    if (tab === 'All') return totalUnread;
+    if (tab === 'Buying') return buyingUnread;
+    if (tab === 'Selling') return sellingUnread;
+    return 0;
+  };
+
+  const renderChatItem = ({ item }) => {
+    const otherUserName = item.otherUser
+      ? `${item.otherUser.first_name || ''} ${item.otherUser.last_name || ''}`.trim() || 'User'
+      : 'User';
+    const itemTitle = item.listing?.title || 'Item';
+    const itemPrice = item.listing?.price || 0;
+    const itemImage = item.listing?.images?.[0];
+    const isBuying = item.isBuyer;
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.chatItem,
+          isBuying ? styles.chatItemBuying : styles.chatItemSelling
+        ]}
+        onPress={() => onChatPress({
+          ...item,
+          sellerName: otherUserName,
+          itemTitle,
+          conversationId: item.id,
+          isBuyer: isBuying,
+        })}
+        activeOpacity={0.7}
+      >
+        {/* Role indicator stripe */}
+        <View style={[
+          styles.roleStripe,
+          isBuying ? styles.roleStripeBuying : styles.roleStripeSelling
+        ]} />
+
+        {/* Item Thumbnail */}
+        <View style={styles.thumbnailContainer}>
+          <Image
+            source={itemImage ? { uri: itemImage } : require('../images/grey_circle.png')}
+            style={styles.itemThumbnail}
+            resizeMode="cover"
+          />
+          <View style={[
+            styles.priceTag,
+            isBuying ? styles.priceTagBuying : styles.priceTagSelling
+          ]}>
+            <Text style={styles.priceTagText}>${itemPrice}</Text>
+          </View>
         </View>
-      </View>
-      
-      {/* Avatar with online indicator */}
-      <View style={styles.avatarContainer}>
-        <View style={styles.avatar}>
-          <Ionicons name="person" size={20} color="#B39BD5" />
+
+        {/* Avatar */}
+        <View style={styles.avatarContainer}>
+          <View style={[
+            styles.avatar,
+            isBuying ? styles.avatarBuying : styles.avatarSelling
+          ]}>
+            <Ionicons name="person" size={20} color={isBuying ? "#2196F3" : "#4CAF50"} />
+          </View>
         </View>
-        {item.isOnline && <View style={styles.onlineIndicator} />}
-      </View>
-      
-      <View style={styles.chatContent}>
-        <View style={styles.chatHeader}>
-          <View style={styles.nameContainer}>
-            <Text style={styles.sellerName}>{item.sellerName}</Text>
-            {item.type === 'selling' && (
-              <View style={styles.typeBadge}>
-                <Text style={styles.typeBadgeText}>Selling</Text>
+
+        <View style={styles.chatContent}>
+          <View style={styles.chatHeader}>
+            <View style={styles.nameContainer}>
+              <Text style={styles.sellerName}>{otherUserName}</Text>
+              <View style={[
+                styles.typeBadge,
+                isBuying ? styles.typeBadgeBuying : styles.typeBadgeSelling
+              ]}>
+                <Ionicons
+                  name={isBuying ? "cart" : "storefront"}
+                  size={10}
+                  color={isBuying ? "#2196F3" : "#4CAF50"}
+                />
+                <Text style={[
+                  styles.typeBadgeText,
+                  isBuying ? styles.typeBadgeTextBuying : styles.typeBadgeTextSelling
+                ]}>
+                  {isBuying ? 'Buying' : 'Selling'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.timestamp}>{formatTimestamp(item.last_message_at)}</Text>
+          </View>
+          <Text style={styles.itemTitle} numberOfLines={1}>{itemTitle}</Text>
+          <View style={styles.messageRow}>
+            <Text
+              style={[styles.lastMessage, item.unreadCount > 0 && styles.unreadMessage]}
+              numberOfLines={1}
+            >
+              {item.last_message_text || 'No messages yet'}
+            </Text>
+            {item.unreadCount > 0 && (
+              <View style={[
+                styles.unreadBadge,
+                isBuying ? styles.unreadBadgeBuying : styles.unreadBadgeSelling
+              ]}>
+                <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
               </View>
             )}
           </View>
-          <Text style={styles.timestamp}>{item.timestamp}</Text>
         </View>
-        <Text style={styles.itemTitle} numberOfLines={1}>{item.itemTitle}</Text>
-        <View style={styles.messageRow}>
-          <Text 
-            style={[styles.lastMessage, item.unread && styles.unreadMessage]} 
-            numberOfLines={1}
-          >
-            {item.lastMessage}
-          </Text>
-          {item.unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconContainer}>
-        <Ionicons name="chatbubbles-outline" size={60} color="#B39BD5" />
+      <View style={[
+        styles.emptyIconContainer,
+        activeTab === 'Buying' ? styles.emptyIconBuying :
+        activeTab === 'Selling' ? styles.emptyIconSelling : styles.emptyIconAll
+      ]}>
+        <Ionicons
+          name={
+            activeTab === 'Buying' ? "cart-outline" :
+            activeTab === 'Selling' ? "storefront-outline" :
+            "chatbubbles-outline"
+          }
+          size={60}
+          color={
+            activeTab === 'Buying' ? "#2196F3" :
+            activeTab === 'Selling' ? "#4CAF50" :
+            "#B39BD5"
+          }
+        />
       </View>
-      <Text style={styles.emptyTitle}>No messages yet</Text>
+      <Text style={styles.emptyTitle}>
+        {activeTab === 'All' ? "No messages yet" :
+         activeTab === 'Buying' ? "No buying conversations" :
+         "No selling conversations"}
+      </Text>
       <Text style={styles.emptySubtitle}>
-        {activeTab === 'All' 
+        {activeTab === 'All'
           ? "Start a conversation by messaging a seller on an item you're interested in"
           : activeTab === 'Buying'
-            ? "You haven't contacted any sellers yet"
-            : "You haven't received any messages from buyers yet"
+            ? "When you contact sellers about items, your conversations will appear here"
+            : "When buyers message you about your listings, conversations will appear here"
         }
       </Text>
       {activeTab === 'All' && (
@@ -161,8 +253,34 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
           <Text style={styles.browseButtonText}>Browse Items</Text>
         </TouchableOpacity>
       )}
+      {activeTab === 'Selling' && (
+        <TouchableOpacity style={[styles.browseButton, styles.sellButton]} onPress={onBack}>
+          <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
+          <Text style={styles.browseButtonText}>Create a Listing</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Messages</Text>
+          </View>
+          <View style={styles.headerAction} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#B39BD5" />
+          <Text style={styles.loadingText}>Loading messages...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -183,7 +301,7 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
           <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
-      
+
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
@@ -202,26 +320,75 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
           )}
         </View>
       </View>
-      
-      {/* Tabs */}
+
+      {/* Tabs with counts */}
       <View style={styles.tabsContainer}>
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-              {tab}
-            </Text>
-            {tab === 'All' && totalUnread > 0 && (
-              <View style={styles.tabBadge}>
-                <Text style={styles.tabBadgeText}>{totalUnread}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
+        {TABS.map((tab) => {
+          const badgeCount = getTabBadgeCount(tab);
+          const isActive = activeTab === tab;
+
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={[
+                styles.tab,
+                isActive && styles.activeTab,
+                tab === 'Buying' && isActive && styles.activeTabBuying,
+                tab === 'Selling' && isActive && styles.activeTabSelling,
+              ]}
+              onPress={() => setActiveTab(tab)}
+            >
+              {tab !== 'All' && (
+                <Ionicons
+                  name={tab === 'Buying' ? "cart" : "storefront"}
+                  size={14}
+                  color={
+                    isActive
+                      ? (tab === 'Buying' ? '#2196F3' : '#4CAF50')
+                      : '#666666'
+                  }
+                />
+              )}
+              <Text style={[
+                styles.tabText,
+                isActive && styles.activeTabText,
+                tab === 'Buying' && isActive && styles.activeTabTextBuying,
+                tab === 'Selling' && isActive && styles.activeTabTextSelling,
+              ]}>
+                {tab}
+              </Text>
+              {badgeCount > 0 && (
+                <View style={[
+                  styles.tabBadge,
+                  tab === 'Buying' && styles.tabBadgeBuying,
+                  tab === 'Selling' && styles.tabBadgeSelling,
+                ]}>
+                  <Text style={styles.tabBadgeText}>{badgeCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
+
+      {/* Summary Stats */}
+      {conversations.length > 0 && (
+        <View style={styles.summaryContainer}>
+          <View style={styles.summaryItem}>
+            <Ionicons name="cart" size={16} color="#2196F3" />
+            <Text style={styles.summaryText}>
+              <Text style={styles.summaryCount}>{buyingCount}</Text> buying
+            </Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Ionicons name="storefront" size={16} color="#4CAF50" />
+            <Text style={styles.summaryText}>
+              <Text style={styles.summaryCount}>{sellingCount}</Text> selling
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Chat List */}
       <FlatList
@@ -231,6 +398,14 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
         contentContainerStyle={filteredChats.length === 0 ? styles.emptyList : styles.chatList}
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor="#B39BD5"
+            colors={['#B39BD5']}
+          />
+        }
       />
     </View>
   );
@@ -286,6 +461,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#999999',
+  },
   searchContainer: {
     backgroundColor: '#502E82',
     paddingHorizontal: 20,
@@ -327,6 +513,12 @@ const styles = StyleSheet.create({
   activeTab: {
     backgroundColor: '#F5F0FF',
   },
+  activeTabBuying: {
+    backgroundColor: '#E3F2FD',
+  },
+  activeTabSelling: {
+    backgroundColor: '#E8F5E9',
+  },
   tabText: {
     fontSize: 14,
     fontFamily: 'Poppins_500Medium',
@@ -334,6 +526,12 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: '#502E82',
+  },
+  activeTabTextBuying: {
+    color: '#2196F3',
+  },
+  activeTabTextSelling: {
+    color: '#4CAF50',
   },
   tabBadge: {
     backgroundColor: '#B39BD5',
@@ -344,10 +542,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  tabBadgeBuying: {
+    backgroundColor: '#2196F3',
+  },
+  tabBadgeSelling: {
+    backgroundColor: '#4CAF50',
+  },
   tabBadgeText: {
     color: '#FFFFFF',
     fontSize: 10,
     fontFamily: 'Poppins_600SemiBold',
+  },
+  summaryContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: '#E0E0E0',
+  },
+  summaryText: {
+    fontSize: 13,
+    fontFamily: 'Poppins_400Regular',
+    color: '#666666',
+  },
+  summaryCount: {
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#333333',
   },
   chatList: {
     paddingVertical: 4,
@@ -358,9 +591,30 @@ const styles = StyleSheet.create({
   chatItem: {
     flexDirection: 'row',
     padding: 16,
+    paddingLeft: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#F5F5F5',
     backgroundColor: '#FFFFFF',
+    position: 'relative',
+  },
+  chatItemBuying: {
+    backgroundColor: '#FAFCFF',
+  },
+  chatItemSelling: {
+    backgroundColor: '#FAFFFA',
+  },
+  roleStripe: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
+  roleStripeBuying: {
+    backgroundColor: '#2196F3',
+  },
+  roleStripeSelling: {
+    backgroundColor: '#4CAF50',
   },
   thumbnailContainer: {
     position: 'relative',
@@ -381,6 +635,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
+  priceTagBuying: {
+    backgroundColor: '#2196F3',
+  },
+  priceTagSelling: {
+    backgroundColor: '#4CAF50',
+  },
   priceTagText: {
     color: '#FFFFFF',
     fontSize: 10,
@@ -389,7 +649,7 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'absolute',
     top: 12,
-    left: 56,
+    left: 60,
     zIndex: 1,
   },
   avatar: {
@@ -402,16 +662,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
-  onlineIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#4CAF50',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  avatarBuying: {
+    backgroundColor: '#E3F2FD',
+  },
+  avatarSelling: {
+    backgroundColor: '#E8F5E9',
   },
   chatContent: {
     flex: 1,
@@ -436,14 +691,29 @@ const styles = StyleSheet.create({
     color: '#333333',
   },
   typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#E8F5E9',
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
+  typeBadgeBuying: {
+    backgroundColor: '#E3F2FD',
+  },
+  typeBadgeSelling: {
+    backgroundColor: '#E8F5E9',
+  },
   typeBadgeText: {
     fontSize: 10,
     fontFamily: 'Poppins_500Medium',
+    color: '#4CAF50',
+  },
+  typeBadgeTextBuying: {
+    color: '#2196F3',
+  },
+  typeBadgeTextSelling: {
     color: '#4CAF50',
   },
   timestamp: {
@@ -482,6 +752,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  unreadBadgeBuying: {
+    backgroundColor: '#2196F3',
+  },
+  unreadBadgeSelling: {
+    backgroundColor: '#4CAF50',
+  },
   unreadBadgeText: {
     color: '#FFFFFF',
     fontSize: 11,
@@ -502,6 +778,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 20,
   },
+  emptyIconAll: {
+    backgroundColor: '#F5F0FF',
+  },
+  emptyIconBuying: {
+    backgroundColor: '#E3F2FD',
+  },
+  emptyIconSelling: {
+    backgroundColor: '#E8F5E9',
+  },
   emptyTitle: {
     fontSize: 22,
     fontFamily: 'Poppins_600SemiBold',
@@ -517,10 +802,16 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   browseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: '#B39BD5',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 24,
+  },
+  sellButton: {
+    backgroundColor: '#4CAF50',
   },
   browseButtonText: {
     fontSize: 15,

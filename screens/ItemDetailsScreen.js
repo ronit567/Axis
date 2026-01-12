@@ -1,36 +1,92 @@
-import React, { useState, useRef } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  ScrollView, 
-  Image, 
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Image,
   Dimensions,
   Share,
   Alert,
-  Animated
+  Animated,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { getSellerProfile, getListings, markListingAsSold, deleteListing } from '../services/listingService';
+import { supabase } from '../config/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Dummy similar items
-const SIMILAR_ITEMS = [
-  { id: 's1', title: 'Similar Item 1', price: 35, condition: 'Good' },
-  { id: 's2', title: 'Similar Item 2', price: 40, condition: 'Like New' },
-  { id: 's3', title: 'Similar Item 3', price: 25, condition: 'Fair' },
-];
-
-export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onItemPress }) {
+export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onItemPress, onEditListing }) {
   const [isFavorited, setIsFavorited] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [sellerProfile, setSellerProfile] = useState(null);
+  const [sellerLoading, setSellerLoading] = useState(true);
+  const [similarItems, setSimilarItems] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [isOwner, setIsOwner] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
-  
-  // Mock multiple images for gallery
-  const images = [1, 2, 3]; // Simulating 3 images
-  
+
+  // Get images from item or use placeholder
+  const images = item.images && item.images.length > 0 ? item.images : [null];
+
+  // Get current user and check ownership
+  useEffect(() => {
+    const checkOwnership = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+        const itemOwnerId = item.user_id || item.seller_id;
+        setIsOwner(user.id === itemOwnerId);
+      }
+    };
+    checkOwnership();
+  }, [item]);
+
+  // Fetch seller profile on mount
+  useEffect(() => {
+    const fetchSellerData = async () => {
+      if (item.user_id || item.seller_id) {
+        const { profile } = await getSellerProfile(item.user_id || item.seller_id);
+        setSellerProfile(profile);
+      }
+      setSellerLoading(false);
+    };
+
+    const fetchSimilarItems = async () => {
+      const { listings } = await getListings({
+        category: item.category,
+        limit: 5,
+      });
+      // Filter out the current item
+      const filtered = listings.filter(l => l.id !== item.id);
+      setSimilarItems(filtered.slice(0, 3));
+    };
+
+    fetchSellerData();
+    fetchSimilarItems();
+  }, [item]);
+
+  // Format time posted
+  const getTimePosted = () => {
+    if (!item.created_at) return 'Recently';
+    const created = new Date(item.created_at);
+    const now = new Date();
+    const diffMs = now - created;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffMinutes > 0) return `${diffMinutes} min${diffMinutes > 1 ? 's' : ''} ago`;
+    return 'Just now';
+  };
+
+  const timePosted = getTimePosted();
+  const views = item.views || 0;
+
   const handleFavorite = () => {
     // Animate heart
     Animated.sequence([
@@ -45,10 +101,10 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
         useNativeDriver: true,
       }),
     ]).start();
-    
+
     setIsFavorited(!isFavorited);
   };
-  
+
   const handleShare = async () => {
     try {
       await Share.share({
@@ -59,15 +115,15 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
       console.log('Error sharing:', error);
     }
   };
-  
+
   const handleMakeOffer = () => {
     Alert.prompt(
       'Make an Offer',
       `Enter your offer for "${item.title}" (Listed at $${item.price})`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Send Offer', 
+        {
+          text: 'Send Offer',
           onPress: (value) => {
             if (value && !isNaN(value)) {
               Alert.alert('Offer Sent!', `Your offer of $${value} has been sent to the seller.`);
@@ -80,15 +136,81 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
       'numeric'
     );
   };
-  
+
+  // Owner-specific actions
+  const handleMarkAsSold = () => {
+    Alert.alert(
+      'Mark as Sold',
+      'Are you sure you want to mark this item as sold? It will be removed from active listings.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark as Sold',
+          onPress: async () => {
+            const { error } = await markListingAsSold(item.id);
+            if (error) {
+              Alert.alert('Error', 'Failed to mark item as sold. Please try again.');
+            } else {
+              Alert.alert('Success', 'Item marked as sold!', [
+                { text: 'OK', onPress: onBack }
+              ]);
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handleDeleteListing = () => {
+    Alert.alert(
+      'Delete Listing',
+      'Are you sure you want to delete this listing? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await deleteListing(item.id);
+            if (error) {
+              Alert.alert('Error', 'Failed to delete listing. Please try again.');
+            } else {
+              Alert.alert('Deleted', 'Your listing has been removed.', [
+                { text: 'OK', onPress: onBack }
+              ]);
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handleEditListing = () => {
+    if (onEditListing) {
+      onEditListing(item);
+    } else {
+      Alert.alert('Coming Soon', 'Edit functionality will be available soon.');
+    }
+  };
+
+  const handleBoostListing = () => {
+    Alert.alert('Boost Listing', 'This feature will help your listing get more visibility. Coming soon!');
+  };
+
   const handleImageScroll = (event) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     setCurrentImageIndex(index);
   };
-  
-  const timePosted = '2 days ago'; // Mock data
-  const views = 47; // Mock data
-  
+
+  // Get seller display name
+  const sellerName = sellerProfile
+    ? `${sellerProfile.first_name || ''} ${sellerProfile.last_name || ''}`.trim() || 'Seller'
+    : 'Loading...';
+
+  const sellerMeta = sellerProfile
+    ? `${sellerProfile.program || 'Student'}${sellerProfile.year_of_study ? ` • ${sellerProfile.year_of_study}` : ''}`
+    : '';
+
   return (
     <View style={styles.container}>
       {/* Header - Now overlaid on image */}
@@ -100,15 +222,22 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           <TouchableOpacity onPress={handleShare} style={styles.headerButton}>
             <Ionicons name="share-outline" size={24} color="#333333" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleFavorite} style={styles.headerButton}>
-            <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-              <Ionicons 
-                name={isFavorited ? "heart" : "heart-outline"} 
-                size={24} 
-                color={isFavorited ? "#FF6B6B" : "#333333"} 
-              />
-            </Animated.View>
-          </TouchableOpacity>
+          {!isOwner && (
+            <TouchableOpacity onPress={handleFavorite} style={styles.headerButton}>
+              <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+                <Ionicons
+                  name={isFavorited ? "heart" : "heart-outline"}
+                  size={24}
+                  color={isFavorited ? "#FF6B6B" : "#333333"}
+                />
+              </Animated.View>
+            </TouchableOpacity>
+          )}
+          {isOwner && (
+            <TouchableOpacity onPress={handleEditListing} style={styles.headerButton}>
+              <Ionicons name="create-outline" size={24} color="#333333" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -122,36 +251,44 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
             onScroll={handleImageScroll}
             scrollEventThrottle={16}
           >
-            {images.map((_, index) => (
+            {images.map((imageUrl, index) => (
               <View key={index} style={styles.imageContainer}>
-                <Image 
-                  source={require('../images/grey_circle.png')}
+                <Image
+                  source={imageUrl ? { uri: imageUrl } : require('../images/grey_circle.png')}
                   style={styles.itemImage}
                   resizeMode="cover"
                 />
               </View>
             ))}
           </ScrollView>
-          
+
           {/* Image Pagination Dots */}
           <View style={styles.paginationDots}>
             {images.map((_, index) => (
-              <View 
-                key={index} 
+              <View
+                key={index}
                 style={[
                   styles.dot,
                   currentImageIndex === index && styles.activeDot
-                ]} 
+                ]}
               />
             ))}
           </View>
-          
+
           {/* Image Counter */}
           <View style={styles.imageCounter}>
             <Text style={styles.imageCounterText}>
               {currentImageIndex + 1}/{images.length}
             </Text>
           </View>
+
+          {/* Owner Badge */}
+          {isOwner && (
+            <View style={styles.ownerBadge}>
+              <Ionicons name="person-circle" size={14} color="#FFFFFF" />
+              <Text style={styles.ownerBadgeText}>Your Listing</Text>
+            </View>
+          )}
         </View>
 
         {/* Item Info */}
@@ -163,7 +300,7 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
               <Text style={styles.itemPrice}>${item.price}</Text>
             </View>
           </View>
-          
+
           {/* Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
@@ -175,7 +312,7 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
               <Text style={styles.statText}>{views} views</Text>
             </View>
           </View>
-          
+
           {/* Condition & Category Pills */}
           <View style={styles.pillsContainer}>
             <View style={styles.conditionPill}>
@@ -186,136 +323,233 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
               <Ionicons name="grid-outline" size={14} color="#666666" />
               <Text style={styles.pillTextGray}>{item.category}</Text>
             </View>
+            {item.status === 'sold' && (
+              <View style={styles.soldPill}>
+                <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
+                <Text style={styles.soldPillText}>Sold</Text>
+              </View>
+            )}
           </View>
+
+          {/* Owner Quick Stats */}
+          {isOwner && (
+            <View style={styles.ownerStatsSection}>
+              <Text style={styles.sectionTitle}>Listing Performance</Text>
+              <View style={styles.ownerStatsCard}>
+                <View style={styles.ownerStatItem}>
+                  <Ionicons name="eye" size={24} color="#B39BD5" />
+                  <Text style={styles.ownerStatValue}>{views}</Text>
+                  <Text style={styles.ownerStatLabel}>Views</Text>
+                </View>
+                <View style={styles.ownerStatDivider} />
+                <View style={styles.ownerStatItem}>
+                  <Ionicons name="chatbubbles" size={24} color="#B39BD5" />
+                  <Text style={styles.ownerStatValue}>--</Text>
+                  <Text style={styles.ownerStatLabel}>Inquiries</Text>
+                </View>
+                <View style={styles.ownerStatDivider} />
+                <View style={styles.ownerStatItem}>
+                  <Ionicons name="heart" size={24} color="#B39BD5" />
+                  <Text style={styles.ownerStatValue}>--</Text>
+                  <Text style={styles.ownerStatLabel}>Saves</Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           {/* Description */}
           <View style={styles.descriptionSection}>
             <Text style={styles.sectionTitle}>Description</Text>
             <Text style={styles.descriptionText}>
-              This is a great {item.title.toLowerCase()} in {item.condition.toLowerCase()} condition. 
-              Perfect for students looking for quality items at affordable prices. 
-              Feel free to message me with any questions!
+              {item.description || `This is a great ${item.title.toLowerCase()} in ${item.condition.toLowerCase()} condition. Perfect for students looking for quality items at affordable prices. Feel free to message me with any questions!`}
             </Text>
           </View>
-          
-          {/* Meetup Preferences */}
-          <View style={styles.meetupSection}>
-            <Text style={styles.sectionTitle}>Meetup Preferences</Text>
-            <View style={styles.meetupCard}>
-              <View style={styles.meetupRow}>
-                <Ionicons name="location-outline" size={20} color="#B39BD5" />
-                <View style={styles.meetupInfo}>
-                  <Text style={styles.meetupLabel}>Preferred Location</Text>
-                  <Text style={styles.meetupValue}>Campus Library, Student Center</Text>
-                </View>
-              </View>
-              <View style={styles.meetupDivider} />
-              <View style={styles.meetupRow}>
-                <Ionicons name="calendar-outline" size={20} color="#B39BD5" />
-                <View style={styles.meetupInfo}>
-                  <Text style={styles.meetupLabel}>Availability</Text>
-                  <Text style={styles.meetupValue}>Weekdays 10am - 6pm</Text>
-                </View>
-              </View>
-            </View>
-          </View>
 
-          {/* Seller Info */}
-          <View style={styles.sellerSection}>
-            <Text style={styles.sectionTitle}>Seller</Text>
-            <TouchableOpacity style={styles.sellerCard}>
-              <View style={styles.sellerAvatar}>
-                <Ionicons name="person" size={32} color="#B39BD5" />
-                <View style={styles.onlineIndicator} />
-              </View>
-              <View style={styles.sellerInfo}>
-                <Text style={styles.sellerName}>John Doe</Text>
-                <Text style={styles.sellerMeta}>Computer Science • 3rd Year</Text>
-                <View style={styles.sellerStats}>
-                  <View style={styles.ratingContainer}>
-                    <Ionicons name="star" size={14} color="#FFB800" />
-                    <Text style={styles.ratingText}>4.8</Text>
+          {/* Meetup Preferences */}
+          {(item.meetup_location || item.location || item.meetup_availability) && (
+            <View style={styles.meetupSection}>
+              <Text style={styles.sectionTitle}>Meetup Preferences</Text>
+              <View style={styles.meetupCard}>
+                {(item.meetup_location || item.location) && (
+                  <View style={styles.meetupRow}>
+                    <Ionicons name="location-outline" size={20} color="#B39BD5" />
+                    <View style={styles.meetupInfo}>
+                      <Text style={styles.meetupLabel}>Preferred Location</Text>
+                      <Text style={styles.meetupValue}>{item.meetup_location || item.location}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.sellerListings}>• 12 listings</Text>
-                  <Text style={styles.responseTime}>• Responds quickly</Text>
+                )}
+                {(item.meetup_location || item.location) && item.meetup_availability && (
+                  <View style={styles.meetupDivider} />
+                )}
+                {item.meetup_availability && (
+                  <View style={styles.meetupRow}>
+                    <Ionicons name="calendar-outline" size={20} color="#B39BD5" />
+                    <View style={styles.meetupInfo}>
+                      <Text style={styles.meetupLabel}>Availability</Text>
+                      <Text style={styles.meetupValue}>{item.meetup_availability}</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Seller Info - Only show if not owner */}
+          {!isOwner && (
+            <View style={styles.sellerSection}>
+              <Text style={styles.sectionTitle}>Seller</Text>
+              <TouchableOpacity style={styles.sellerCard}>
+                <View style={styles.sellerAvatar}>
+                  {sellerLoading ? (
+                    <ActivityIndicator size="small" color="#B39BD5" />
+                  ) : (
+                    <Ionicons name="person" size={32} color="#B39BD5" />
+                  )}
+                  <View style={styles.onlineIndicator} />
+                </View>
+                <View style={styles.sellerInfo}>
+                  <Text style={styles.sellerName}>{sellerName}</Text>
+                  {sellerMeta ? (
+                    <Text style={styles.sellerMeta}>{sellerMeta}</Text>
+                  ) : null}
+                  <View style={styles.sellerStats}>
+                    <Text style={styles.responseTime}>Responds quickly</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#CCCCCC" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Safety Tips - Only show if not owner */}
+          {!isOwner && (
+            <View style={styles.safetySection}>
+              <View style={styles.safetyHeader}>
+                <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
+                <Text style={styles.safetyTitle}>Safety Tips</Text>
+              </View>
+              <View style={styles.safetyTips}>
+                <View style={styles.safetyTip}>
+                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                  <Text style={styles.safetyTipText}>Meet in public places on campus</Text>
+                </View>
+                <View style={styles.safetyTip}>
+                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                  <Text style={styles.safetyTipText}>Inspect items before paying</Text>
+                </View>
+                <View style={styles.safetyTip}>
+                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                  <Text style={styles.safetyTipText}>Use secure payment methods</Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#CCCCCC" />
-            </TouchableOpacity>
-          </View>
-          
-          {/* Safety Tips */}
-          <View style={styles.safetySection}>
-            <View style={styles.safetyHeader}>
-              <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
-              <Text style={styles.safetyTitle}>Safety Tips</Text>
             </View>
-            <View style={styles.safetyTips}>
-              <View style={styles.safetyTip}>
-                <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                <Text style={styles.safetyTipText}>Meet in public places on campus</Text>
+          )}
+
+          {/* Seller Tips - Only show if owner */}
+          {isOwner && (
+            <View style={styles.sellerTipsSection}>
+              <View style={styles.sellerTipsHeader}>
+                <Ionicons name="bulb" size={20} color="#FF9800" />
+                <Text style={styles.sellerTipsTitle}>Seller Tips</Text>
               </View>
-              <View style={styles.safetyTip}>
-                <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                <Text style={styles.safetyTipText}>Inspect items before paying</Text>
-              </View>
-              <View style={styles.safetyTip}>
-                <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                <Text style={styles.safetyTipText}>Use secure payment methods</Text>
+              <View style={styles.sellerTips}>
+                <View style={styles.sellerTip}>
+                  <Ionicons name="camera" size={16} color="#FF9800" />
+                  <Text style={styles.sellerTipText}>Add more photos to increase interest</Text>
+                </View>
+                <View style={styles.sellerTip}>
+                  <Ionicons name="pricetag" size={16} color="#FF9800" />
+                  <Text style={styles.sellerTipText}>Consider lowering price if no inquiries</Text>
+                </View>
+                <View style={styles.sellerTip}>
+                  <Ionicons name="chatbubble" size={16} color="#FF9800" />
+                  <Text style={styles.sellerTipText}>Respond quickly to buyers for better sales</Text>
+                </View>
               </View>
             </View>
-          </View>
-          
+          )}
+
           {/* Similar Items */}
-          <View style={styles.similarSection}>
-            <Text style={styles.sectionTitle}>Similar Items</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.similarList}
-            >
-              {SIMILAR_ITEMS.map((similarItem) => (
-                <TouchableOpacity 
-                  key={similarItem.id} 
-                  style={styles.similarCard}
-                  onPress={() => onItemPress && onItemPress(similarItem)}
-                >
-                  <View style={styles.similarImageContainer}>
-                    <Image 
-                      source={require('../images/grey_circle.png')}
-                      style={styles.similarImage}
-                      resizeMode="cover"
-                    />
-                  </View>
-                  <Text style={styles.similarTitle} numberOfLines={1}>{similarItem.title}</Text>
-                  <Text style={styles.similarPrice}>${similarItem.price}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-          
+          {similarItems.length > 0 && (
+            <View style={styles.similarSection}>
+              <Text style={styles.sectionTitle}>Similar Items</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.similarList}
+              >
+                {similarItems.map((similarItem) => (
+                  <TouchableOpacity
+                    key={similarItem.id}
+                    style={styles.similarCard}
+                    onPress={() => onItemPress && onItemPress(similarItem)}
+                  >
+                    <View style={styles.similarImageContainer}>
+                      <Image
+                        source={similarItem.images && similarItem.images.length > 0
+                          ? { uri: similarItem.images[0] }
+                          : require('../images/grey_circle.png')}
+                        style={styles.similarImage}
+                        resizeMode="cover"
+                      />
+                    </View>
+                    <Text style={styles.similarTitle} numberOfLines={1}>{similarItem.title}</Text>
+                    <Text style={styles.similarPrice}>${similarItem.price}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {/* Bottom Spacer */}
           <View style={{ height: 120 }} />
         </View>
       </ScrollView>
 
-      {/* Bottom Action Bar */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity 
-          style={styles.offerButton}
-          onPress={handleMakeOffer}
-        >
-          <MaterialCommunityIcons name="tag-outline" size={20} color="#B39BD5" />
-          <Text style={styles.offerButtonText}>Make Offer</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.chatButton}
-          onPress={() => onChatWithSeller(item)}
-        >
-          <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
-          <Text style={styles.chatButtonText}>Message Seller</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Bottom Action Bar - Different for owner vs buyer */}
+      {isOwner ? (
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={styles.ownerActionButton}
+            onPress={handleBoostListing}
+          >
+            <Ionicons name="rocket-outline" size={20} color="#B39BD5" />
+            <Text style={styles.ownerActionButtonText}>Boost</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.ownerActionButton}
+            onPress={handleDeleteListing}
+          >
+            <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
+            <Text style={[styles.ownerActionButtonText, { color: '#FF6B6B' }]}>Delete</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.soldButton}
+            onPress={handleMarkAsSold}
+          >
+            <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+            <Text style={styles.soldButtonText}>Mark as Sold</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={styles.offerButton}
+            onPress={handleMakeOffer}
+          >
+            <MaterialCommunityIcons name="tag-outline" size={20} color="#B39BD5" />
+            <Text style={styles.offerButtonText}>Make Offer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.chatButton}
+            onPress={() => onChatWithSeller({ ...item, sellerProfile })}
+          >
+            <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
+            <Text style={styles.chatButtonText}>Message Seller</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -405,6 +639,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Poppins_500Medium',
   },
+  ownerBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#502E82',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  ownerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Poppins_600SemiBold',
+  },
   infoSection: {
     padding: 20,
   },
@@ -444,6 +695,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginBottom: 24,
+    flexWrap: 'wrap',
   },
   conditionPill: {
     flexDirection: 'row',
@@ -463,6 +715,20 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
   },
+  soldPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  soldPillText: {
+    fontSize: 13,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#FFFFFF',
+  },
   pillText: {
     fontSize: 13,
     fontFamily: 'Poppins_500Medium',
@@ -472,6 +738,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Poppins_500Medium',
     color: '#666666',
+  },
+  ownerStatsSection: {
+    marginBottom: 24,
+  },
+  ownerStatsCard: {
+    flexDirection: 'row',
+    backgroundColor: '#F9F9F9',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  ownerStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  ownerStatValue: {
+    fontSize: 20,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#333333',
+    marginTop: 4,
+  },
+  ownerStatLabel: {
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
+    color: '#999999',
+  },
+  ownerStatDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#E5E5E5',
   },
   descriptionSection: {
     marginBottom: 24,
@@ -570,27 +866,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  ratingText: {
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
-  },
-  sellerListings: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    color: '#999999',
-    marginLeft: 6,
-  },
   responseTime: {
     fontSize: 12,
     fontFamily: 'Poppins_400Regular',
     color: '#4CAF50',
-    marginLeft: 6,
   },
   safetySection: {
     marginBottom: 24,
@@ -618,6 +897,36 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   safetyTipText: {
+    fontSize: 13,
+    fontFamily: 'Poppins_400Regular',
+    color: '#666666',
+  },
+  sellerTipsSection: {
+    marginBottom: 24,
+    backgroundColor: '#FFF8E1',
+    borderRadius: 12,
+    padding: 16,
+  },
+  sellerTipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  sellerTipsTitle: {
+    fontSize: 15,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#333333',
+  },
+  sellerTips: {
+    gap: 8,
+  },
+  sellerTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sellerTipText: {
     fontSize: 13,
     fontFamily: 'Poppins_400Regular',
     color: '#666666',
@@ -703,6 +1012,38 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chatButtonText: {
+    fontSize: 15,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#FFFFFF',
+  },
+  ownerActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  ownerActionButtonText: {
+    fontSize: 13,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#B39BD5',
+  },
+  soldButton: {
+    flex: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  soldButtonText: {
     fontSize: 15,
     fontFamily: 'Poppins_600SemiBold',
     color: '#FFFFFF',

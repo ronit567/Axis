@@ -1,11 +1,16 @@
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 
 export default function ListingCard({ listing, onPress }) {
+  // Get the first image URL or use placeholder
+  const imageSource = listing.images && listing.images.length > 0
+    ? { uri: listing.images[0] }
+    : require('../../images/grey_circle.png');
+
   return (
     <Pressable style={styles.card} onPress={onPress}>
       <View style={styles.imagePlaceholder}>
-        <Image 
-          source={require('../../images/grey_circle.png')}
+        <Image
+          source={imageSource}
           style={styles.placeholderImage}
           resizeMode="cover"
         />

@@ -335,6 +335,6 @@ export default function App() {
         />
       );
     }
-    return <MainHomeScreen firstName={firstName} onLogout={handleLogout} />;
+    return <MainHomeScreen firstName={firstName} onLogout={handleLogout} userId={user?.id} />;
   }
 }
