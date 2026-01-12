@@ -1,87 +1,144 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  TextInput, 
-  FlatList, 
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   Keyboard,
   Image,
   Alert,
-  Animated
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  getOrCreateConversation,
+  getMessages,
+  sendMessage,
+  markMessagesAsRead,
+  subscribeToMessages,
+  unsubscribe
+} from '../services/messagingService';
+import { markListingAsSold } from '../services/listingService';
+import { supabase } from '../config/supabase';
 
-// Dummy messages - will be replaced with real data later
-const DUMMY_MESSAGES = [
-  {
-    id: '1',
-    text: 'Hi! Is this item still available?',
-    sender: 'user',
-    timestamp: '10:30 AM',
-    read: true,
-  },
-  {
-    id: '2',
-    text: 'Yes, it is! Are you interested?',
-    sender: 'seller',
-    timestamp: '10:32 AM',
-    read: true,
-  },
-  {
-    id: '3',
-    text: 'Great! Can we meet on campus tomorrow?',
-    sender: 'user',
-    timestamp: '10:35 AM',
-    read: true,
-  },
-  {
-    id: '4',
-    text: 'Sure! How about 2pm at the library?',
-    sender: 'seller',
-    timestamp: '10:37 AM',
-    read: true,
-  },
-];
-
-const QUICK_REPLIES = [
+const BUYER_QUICK_REPLIES = [
   "Is this still available?",
   "What's your lowest price?",
   "Can we meet today?",
 ];
 
-export default function ChatScreen({ chat, item, onBack }) {
-  const [messages, setMessages] = useState(DUMMY_MESSAGES);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [showQuickReplies, setShowQuickReplies] = useState(true);
-  const flatListRef = useRef(null);
-  const typingDots = useRef(new Animated.Value(0)).current;
+const SELLER_QUICK_REPLIES = [
+  "Yes, it's still available!",
+  "When can you pick it up?",
+  "I can do a small discount",
+];
 
-  // Animate typing indicator
+export default function ChatScreen({ chat, item, onBack }) {
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [showQuickReplies, setShowQuickReplies] = useState(true);
+  const [conversationId, setConversationId] = useState(chat?.conversationId || null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [isBuyer, setIsBuyer] = useState(chat?.isBuyer ?? true);
+  const flatListRef = useRef(null);
+
+  // Determine role based on chat data
   useEffect(() => {
-    if (isTyping) {
-      const animation = Animated.loop(
-        Animated.sequence([
-          Animated.timing(typingDots, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(typingDots, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      animation.start();
-      return () => animation.stop();
+    if (chat?.isBuyer !== undefined) {
+      setIsBuyer(chat.isBuyer);
     }
-  }, [isTyping]);
+  }, [chat]);
+
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+      }
+    };
+    getCurrentUser();
+  }, []);
+
+  // Initialize conversation and fetch messages
+  useEffect(() => {
+    const initializeChat = async () => {
+      try {
+        setIsLoading(true);
+
+        let convId = conversationId;
+
+        // If no conversation ID, create/get one
+        if (!convId && item && chat?.sellerId) {
+          const { conversation, error } = await getOrCreateConversation(
+            item.id,
+            chat.sellerId
+          );
+
+          if (error) {
+            console.error('Error creating conversation:', error);
+            setIsLoading(false);
+            return;
+          }
+
+          if (conversation) {
+            convId = conversation.id;
+            setConversationId(convId);
+          }
+        }
+
+        // Fetch existing messages
+        if (convId) {
+          const { messages: data, error } = await getMessages(convId);
+          if (!error && data) {
+            setMessages(data);
+            // Hide quick replies if there are messages
+            if (data.length > 0) {
+              setShowQuickReplies(false);
+            }
+          }
+
+          // Mark messages as read
+          await markMessagesAsRead(convId);
+        }
+      } catch (error) {
+        console.error('Error initializing chat:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeChat();
+  }, [item, chat?.sellerId]);
+
+  // Subscribe to new messages
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const subscription = subscribeToMessages(conversationId, (newMessage) => {
+      setMessages(prev => {
+        // Check if message already exists
+        const exists = prev.some(msg => msg.id === newMessage.id);
+        if (exists) return prev;
+        return [...prev, newMessage];
+      });
+
+      // Mark as read if from other user
+      if (newMessage.sender_id !== currentUserId) {
+        markMessagesAsRead(conversationId);
+      }
+    });
+
+    return () => {
+      unsubscribe(subscription);
+    };
+  }, [conversationId, currentUserId]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -92,53 +149,95 @@ export default function ChatScreen({ chat, item, onBack }) {
     }
   }, [messages]);
 
-  // Simulate seller typing after user sends message
-  const simulateSellerTyping = () => {
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-    }, 2000);
+  // Format timestamp
+  const formatTimestamp = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
   };
 
-  const handleSend = (text = inputText) => {
-    if (text.trim() === '') return;
+  const handleSend = useCallback(async (text = inputText) => {
+    if (text.trim() === '' || isSending) return;
 
-    const newMessage = {
-      id: Date.now().toString(),
-      text: text.trim(),
-      sender: 'user',
-      timestamp: new Date().toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit' 
-      }),
-      read: false,
-    };
-
-    setMessages([...messages, newMessage]);
+    const messageText = text.trim();
     setInputText('');
     setShowQuickReplies(false);
     Keyboard.dismiss();
-    
-    // Simulate seller typing response
-    simulateSellerTyping();
-  };
-  
+
+    try {
+      setIsSending(true);
+
+      let convId = conversationId;
+
+      // Create conversation if needed
+      if (!convId && item && chat?.sellerId) {
+        const { conversation, error } = await getOrCreateConversation(
+          item.id,
+          chat.sellerId
+        );
+
+        if (error) {
+          Alert.alert('Error', 'Failed to start conversation. Please try again.');
+          setInputText(messageText);
+          return;
+        }
+
+        convId = conversation.id;
+        setConversationId(convId);
+      }
+
+      if (!convId) {
+        Alert.alert('Error', 'Unable to create conversation.');
+        setInputText(messageText);
+        return;
+      }
+
+      // Send message
+      const { message, error } = await sendMessage(convId, messageText);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to send message. Please try again.');
+        setInputText(messageText);
+        return;
+      }
+
+      // Add message to local state immediately if not already added by subscription
+      if (message) {
+        setMessages(prev => {
+          const exists = prev.some(msg => msg.id === message.id);
+          if (exists) return prev;
+          return [...prev, message];
+        });
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+      setInputText(messageText);
+    } finally {
+      setIsSending(false);
+    }
+  }, [inputText, isSending, conversationId, item, chat?.sellerId]);
+
   const handleQuickReply = (reply) => {
     handleSend(reply);
   };
-  
+
+  // Buyer actions
   const handleMakeOffer = () => {
-    const itemPrice = item?.price || chat?.itemPrice || 50;
+    const itemPrice = item?.price || chat?.itemPrice || chat?.listing?.price || 50;
     Alert.prompt(
       'Make an Offer',
       `Enter your offer (Listed at $${itemPrice})`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Send Offer', 
+        {
+          text: 'Send Offer',
           onPress: (value) => {
             if (value && !isNaN(value)) {
-              handleSend(`I'd like to offer $${value} for this item. Let me know if that works!`);
+              handleSend(`💰 I'd like to offer $${value} for this item. Let me know if that works!`);
             }
           }
         },
@@ -148,66 +247,176 @@ export default function ChatScreen({ chat, item, onBack }) {
       'numeric'
     );
   };
-  
+
   const handleScheduleMeetup = () => {
     Alert.alert(
       'Schedule Meetup',
       'Choose a suggested time:',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Today', 
-          onPress: () => handleSend("Can we meet today? I'm flexible with the time.")
+        {
+          text: 'Today',
+          onPress: () => handleSend("📅 Can we meet today? I'm flexible with the time.")
         },
-        { 
-          text: 'Tomorrow', 
-          onPress: () => handleSend("How about meeting tomorrow? What time works for you?")
+        {
+          text: 'Tomorrow',
+          onPress: () => handleSend("📅 How about meeting tomorrow? What time works for you?")
         },
-        { 
-          text: 'This Week', 
-          onPress: () => handleSend("I'm free this week. When would be a good time to meet?")
+        {
+          text: 'This Week',
+          onPress: () => handleSend("📅 I'm free this week. When would be a good time to meet?")
         },
       ]
     );
   };
 
+  // Seller actions
+  const handleMarkAsSold = () => {
+    Alert.alert(
+      'Mark as Sold',
+      'Mark this item as sold to this buyer?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark as Sold',
+          onPress: async () => {
+            const listingId = item?.id || chat?.listing?.id;
+            if (listingId) {
+              const { error } = await markListingAsSold(listingId);
+              if (error) {
+                Alert.alert('Error', 'Failed to mark as sold.');
+              } else {
+                handleSend("✅ Great doing business with you! I've marked this item as sold.");
+                Alert.alert('Success', 'Item marked as sold!');
+              }
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handleAcceptOffer = () => {
+    Alert.alert(
+      'Accept Offer',
+      'Accept the buyer\'s latest offer?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: () => handleSend("✅ I accept your offer! Let's arrange a meetup.")
+        },
+      ]
+    );
+  };
+
+  const handleDeclineOffer = () => {
+    const itemPrice = item?.price || chat?.itemPrice || chat?.listing?.price || 50;
+    Alert.alert(
+      'Decline Offer',
+      'How would you like to respond?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Decline',
+          onPress: () => handleSend("Sorry, I can't accept that offer. Are you able to come up a bit?")
+        },
+        {
+          text: 'Counter',
+          onPress: () => {
+            Alert.prompt(
+              'Counter Offer',
+              `Enter your counter offer (Listed at $${itemPrice})`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Send',
+                  onPress: (value) => {
+                    if (value && !isNaN(value)) {
+                      handleSend(`💰 I can do $${value}. Does that work for you?`);
+                    }
+                  }
+                },
+              ],
+              'plain-text',
+              '',
+              'numeric'
+            );
+          }
+        },
+      ]
+    );
+  };
+
+  const handleSuggestMeetup = () => {
+    const meetupLocation = item?.meetup_location || item?.location || chat?.listing?.meetup_location;
+    if (meetupLocation) {
+      handleSend(`📍 I usually meet at ${meetupLocation}. Does that work for you?`);
+    } else {
+      Alert.prompt(
+        'Suggest Meetup Location',
+        'Enter a meetup location',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Send',
+            onPress: (value) => {
+              if (value) {
+                handleSend(`📍 How about we meet at ${value}? Let me know if that works!`);
+              }
+            }
+          },
+        ],
+        'plain-text',
+        ''
+      );
+    }
+  };
+
   const renderMessage = ({ item: msg, index }) => {
-    const isUser = msg.sender === 'user';
+    const isUser = msg.sender_id === currentUserId;
     const isLastMessage = index === messages.length - 1;
-    
+
     return (
       <View style={[
         styles.messageContainer,
         isUser ? styles.userMessageContainer : styles.sellerMessageContainer
       ]}>
         {!isUser && (
-          <View style={styles.sellerAvatarSmall}>
-            <Ionicons name="person" size={14} color="#B39BD5" />
+          <View style={[
+            styles.otherAvatarSmall,
+            isBuyer ? styles.avatarSeller : styles.avatarBuyer
+          ]}>
+            <Ionicons
+              name="person"
+              size={14}
+              color={isBuyer ? "#4CAF50" : "#2196F3"}
+            />
           </View>
         )}
         <View style={[
           styles.messageBubble,
-          isUser ? styles.userBubble : styles.sellerBubble
+          isUser ? styles.userBubble : styles.otherBubble
         ]}>
           <Text style={[
             styles.messageText,
-            isUser ? styles.userMessageText : styles.sellerMessageText
+            isUser ? styles.userMessageText : styles.otherMessageText
           ]}>
-            {msg.text}
+            {msg.content}
           </Text>
           <View style={styles.messageFooter}>
             <Text style={[
               styles.timestamp,
-              isUser ? styles.userTimestamp : styles.sellerTimestamp
+              isUser ? styles.userTimestamp : styles.otherTimestamp
             ]}>
-              {msg.timestamp}
+              {formatTimestamp(msg.created_at)}
             </Text>
             {isUser && isLastMessage && (
               <View style={styles.readReceipt}>
-                <Ionicons 
-                  name={msg.read ? "checkmark-done" : "checkmark"} 
-                  size={14} 
-                  color={msg.read ? "#4FC3F7" : "#F0E6FF"} 
+                <Ionicons
+                  name={msg.is_read ? "checkmark-done" : "checkmark"}
+                  size={14}
+                  color={msg.is_read ? "#4FC3F7" : "#F0E6FF"}
                 />
               </View>
             )}
@@ -216,85 +425,145 @@ export default function ChatScreen({ chat, item, onBack }) {
       </View>
     );
   };
-  
-  const renderTypingIndicator = () => {
-    if (!isTyping) return null;
-    
+
+  const otherUserName = chat?.sellerName || 'User';
+  const itemTitle = item?.title || chat?.itemTitle || 'Item';
+  const itemPrice = item?.price || chat?.itemPrice || chat?.listing?.price || 0;
+  const itemImage = item?.images?.[0] || chat?.listing?.images?.[0];
+  const quickReplies = isBuyer ? BUYER_QUICK_REPLIES : SELLER_QUICK_REPLIES;
+
+  if (isLoading) {
     return (
-      <View style={styles.typingContainer}>
-        <View style={styles.sellerAvatarSmall}>
-          <Ionicons name="person" size={14} color="#B39BD5" />
+      <View style={styles.container}>
+        <View style={[styles.header, isBuyer ? styles.headerBuyer : styles.headerSeller]}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerInfo}>
+            <View style={styles.headerAvatarContainer}>
+              <View style={[
+                styles.headerAvatar,
+                isBuyer ? styles.headerAvatarBuyer : styles.headerAvatarSeller
+              ]}>
+                <Ionicons
+                  name="person"
+                  size={18}
+                  color={isBuyer ? "#4CAF50" : "#2196F3"}
+                />
+              </View>
+            </View>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>{otherUserName}</Text>
+            </View>
+          </View>
+          <View style={styles.moreButton} />
         </View>
-        <View style={styles.typingBubble}>
-          <Animated.View style={[styles.typingDot, { opacity: typingDots }]} />
-          <Animated.View style={[styles.typingDot, { opacity: typingDots }]} />
-          <Animated.View style={[styles.typingDot, { opacity: typingDots }]} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={isBuyer ? "#2196F3" : "#4CAF50"} />
+          <Text style={styles.loadingText}>Loading messages...</Text>
         </View>
       </View>
     );
-  };
-
-  const sellerName = chat?.sellerName || 'Seller';
-  const itemTitle = item?.title || chat?.itemTitle || 'Item';
-  const itemPrice = item?.price || chat?.itemPrice || 0;
-  const isOnline = chat?.isOnline ?? true;
+  }
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Header with role indicator */}
+      <View style={[styles.header, isBuyer ? styles.headerBuyer : styles.headerSeller]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.headerInfo}>
           <View style={styles.headerAvatarContainer}>
-            <View style={styles.headerAvatar}>
-              <Ionicons name="person" size={18} color="#B39BD5" />
+            <View style={[
+              styles.headerAvatar,
+              isBuyer ? styles.headerAvatarBuyer : styles.headerAvatarSeller
+            ]}>
+              <Ionicons
+                name="person"
+                size={18}
+                color={isBuyer ? "#4CAF50" : "#2196F3"}
+              />
             </View>
-            {isOnline && <View style={styles.onlineIndicator} />}
           </View>
           <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>{sellerName}</Text>
-            <Text style={styles.headerSubtitle}>
-              {isOnline ? 'Online now' : 'Last seen recently'}
-            </Text>
+            <Text style={styles.headerTitle}>{otherUserName}</Text>
+            <View style={styles.roleIndicator}>
+              <Ionicons
+                name={isBuyer ? "cart" : "storefront"}
+                size={12}
+                color="rgba(255,255,255,0.8)"
+              />
+              <Text style={styles.roleText}>
+                {isBuyer ? "You're buying" : "You're selling"}
+              </Text>
+            </View>
           </View>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.moreButton}>
           <Ionicons name="ellipsis-vertical" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
-      
+
       {/* Item Preview Card */}
-      <TouchableOpacity style={styles.itemPreviewCard}>
-        <Image 
-          source={require('../images/grey_circle.png')}
+      <TouchableOpacity style={[
+        styles.itemPreviewCard,
+        isBuyer ? styles.itemPreviewBuyer : styles.itemPreviewSeller
+      ]}>
+        <Image
+          source={itemImage ? { uri: itemImage } : require('../images/grey_circle.png')}
           style={styles.itemPreviewImage}
           resizeMode="cover"
         />
         <View style={styles.itemPreviewInfo}>
           <Text style={styles.itemPreviewTitle} numberOfLines={1}>{itemTitle}</Text>
-          <Text style={styles.itemPreviewPrice}>${itemPrice}</Text>
+          <Text style={[
+            styles.itemPreviewPrice,
+            isBuyer ? styles.priceBuyer : styles.priceSeller
+          ]}>
+            ${itemPrice}
+          </Text>
         </View>
+
+        {/* Role-specific quick actions */}
         <View style={styles.itemPreviewActions}>
-          <TouchableOpacity 
-            style={styles.itemPreviewAction}
-            onPress={handleMakeOffer}
-          >
-            <MaterialCommunityIcons name="tag-outline" size={18} color="#B39BD5" />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.itemPreviewAction}
-            onPress={handleScheduleMeetup}
-          >
-            <Ionicons name="calendar-outline" size={18} color="#B39BD5" />
-          </TouchableOpacity>
+          {isBuyer ? (
+            <>
+              <TouchableOpacity
+                style={[styles.itemPreviewAction, styles.actionBuyer]}
+                onPress={handleMakeOffer}
+              >
+                <MaterialCommunityIcons name="tag-outline" size={18} color="#2196F3" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.itemPreviewAction, styles.actionBuyer]}
+                onPress={handleScheduleMeetup}
+              >
+                <Ionicons name="calendar-outline" size={18} color="#2196F3" />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[styles.itemPreviewAction, styles.actionSeller]}
+                onPress={handleAcceptOffer}
+              >
+                <Ionicons name="checkmark-circle-outline" size={18} color="#4CAF50" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.itemPreviewAction, styles.actionSeller]}
+                onPress={handleMarkAsSold}
+              >
+                <Ionicons name="pricetag-outline" size={18} color="#4CAF50" />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </TouchableOpacity>
 
@@ -306,31 +575,78 @@ export default function ChatScreen({ chat, item, onBack }) {
         keyExtractor={(msg) => msg.id}
         contentContainerStyle={styles.messagesList}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        ListFooterComponent={renderTypingIndicator}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons
+              name={isBuyer ? "cart-outline" : "storefront-outline"}
+              size={48}
+              color={isBuyer ? "#2196F3" : "#4CAF50"}
+            />
+            <Text style={styles.emptyText}>Start the conversation!</Text>
+            <Text style={styles.emptySubtext}>
+              {isBuyer
+                ? `Ask ${otherUserName} about "${itemTitle}"`
+                : `Reply to the buyer about "${itemTitle}"`
+              }
+            </Text>
+          </View>
+        }
       />
-      
+
       {/* Quick Replies */}
-      {showQuickReplies && messages.length <= 4 && (
+      {showQuickReplies && messages.length === 0 && (
         <View style={styles.quickRepliesContainer}>
-          <Text style={styles.quickRepliesLabel}>Quick replies:</Text>
+          <Text style={styles.quickRepliesLabel}>
+            {isBuyer ? "Buyer quick replies:" : "Seller quick replies:"}
+          </Text>
           <View style={styles.quickReplies}>
-            {QUICK_REPLIES.map((reply, index) => (
-              <TouchableOpacity 
+            {quickReplies.map((reply, index) => (
+              <TouchableOpacity
                 key={index}
-                style={styles.quickReplyButton}
+                style={[
+                  styles.quickReplyButton,
+                  isBuyer ? styles.quickReplyBuyer : styles.quickReplySeller
+                ]}
                 onPress={() => handleQuickReply(reply)}
               >
-                <Text style={styles.quickReplyText}>{reply}</Text>
+                <Text style={[
+                  styles.quickReplyText,
+                  isBuyer ? styles.quickReplyTextBuyer : styles.quickReplyTextSeller
+                ]}>
+                  {reply}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
       )}
 
+      {/* Seller Action Bar */}
+      {!isBuyer && (
+        <View style={styles.sellerActionsBar}>
+          <TouchableOpacity style={styles.sellerActionBtn} onPress={handleAcceptOffer}>
+            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+            <Text style={styles.sellerActionText}>Accept</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.sellerActionBtn} onPress={handleDeclineOffer}>
+            <Ionicons name="close-circle" size={20} color="#FF6B6B" />
+            <Text style={styles.sellerActionText}>Decline</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.sellerActionBtn} onPress={handleSuggestMeetup}>
+            <Ionicons name="location" size={20} color="#FF9800" />
+            <Text style={styles.sellerActionText}>Meetup</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.sellerActionBtn} onPress={handleMarkAsSold}>
+            <Ionicons name="pricetag" size={20} color="#9C27B0" />
+            <Text style={styles.sellerActionText}>Sold</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Input Bar */}
       <View style={styles.inputContainer}>
         <TouchableOpacity style={styles.attachButton}>
-          <Ionicons name="add-circle-outline" size={26} color="#B39BD5" />
+          <Ionicons name="add-circle-outline" size={26} color={isBuyer ? "#2196F3" : "#4CAF50"} />
         </TouchableOpacity>
         <View style={styles.inputWrapper}>
           <TextInput
@@ -341,21 +657,27 @@ export default function ChatScreen({ chat, item, onBack }) {
             onChangeText={setInputText}
             multiline
             maxLength={500}
+            editable={!isSending}
           />
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.sendButton,
-            inputText.trim() === '' && styles.sendButtonDisabled
+            isBuyer ? styles.sendButtonBuyer : styles.sendButtonSeller,
+            (inputText.trim() === '' || isSending) && styles.sendButtonDisabled
           ]}
           onPress={() => handleSend()}
-          disabled={inputText.trim() === ''}
+          disabled={inputText.trim() === '' || isSending}
         >
-          <Ionicons 
-            name="send" 
-            size={20} 
-            color={inputText.trim() === '' ? '#CCCCCC' : '#FFFFFF'} 
-          />
+          {isSending ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons
+              name="send"
+              size={20}
+              color={inputText.trim() === '' ? '#CCCCCC' : '#FFFFFF'}
+            />
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -370,10 +692,15 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#502E82',
     paddingTop: 60,
     paddingBottom: 12,
     paddingHorizontal: 16,
+  },
+  headerBuyer: {
+    backgroundColor: '#1976D2',
+  },
+  headerSeller: {
+    backgroundColor: '#388E3C',
   },
   backButton: {
     width: 40,
@@ -394,20 +721,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F5F0FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  onlineIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#4CAF50',
-    borderWidth: 2,
-    borderColor: '#502E82',
+  headerAvatarBuyer: {
+    backgroundColor: '#E8F5E9',
+  },
+  headerAvatarSeller: {
+    backgroundColor: '#E3F2FD',
   },
   headerTextContainer: {
     marginLeft: 12,
@@ -418,16 +739,32 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     color: '#FFFFFF',
   },
-  headerSubtitle: {
+  roleIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  roleText: {
     fontSize: 12,
     fontFamily: 'Poppins_400Regular',
-    color: '#E0D4F0',
+    color: 'rgba(255,255,255,0.8)',
   },
   moreButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#999999',
   },
   itemPreviewCard: {
     flexDirection: 'row',
@@ -437,6 +774,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+  },
+  itemPreviewBuyer: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#2196F3',
+  },
+  itemPreviewSeller: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#4CAF50',
   },
   itemPreviewImage: {
     width: 50,
@@ -457,7 +802,12 @@ const styles = StyleSheet.create({
   itemPreviewPrice: {
     fontSize: 16,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#B39BD5',
+  },
+  priceBuyer: {
+    color: '#2196F3',
+  },
+  priceSeller: {
+    color: '#4CAF50',
   },
   itemPreviewActions: {
     flexDirection: 'row',
@@ -467,14 +817,20 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F5F0FF',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  actionBuyer: {
+    backgroundColor: '#E3F2FD',
+  },
+  actionSeller: {
+    backgroundColor: '#E8F5E9',
   },
   messagesList: {
     paddingHorizontal: 16,
     paddingVertical: 16,
     paddingBottom: 10,
+    flexGrow: 1,
   },
   messageContainer: {
     marginBottom: 12,
@@ -488,14 +844,19 @@ const styles = StyleSheet.create({
   sellerMessageContainer: {
     alignSelf: 'flex-start',
   },
-  sellerAvatarSmall: {
+  otherAvatarSmall: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#F5F0FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
+  },
+  avatarSeller: {
+    backgroundColor: '#E8F5E9',
+  },
+  avatarBuyer: {
+    backgroundColor: '#E3F2FD',
   },
   messageBubble: {
     paddingHorizontal: 14,
@@ -507,7 +868,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#B39BD5',
     borderBottomRightRadius: 4,
   },
-  sellerBubble: {
+  otherBubble: {
     backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 4,
     shadowColor: '#000',
@@ -524,7 +885,7 @@ const styles = StyleSheet.create({
   userMessageText: {
     color: '#FFFFFF',
   },
-  sellerMessageText: {
+  otherMessageText: {
     color: '#333333',
   },
   messageFooter: {
@@ -541,32 +902,31 @@ const styles = StyleSheet.create({
   userTimestamp: {
     color: '#F0E6FF',
   },
-  sellerTimestamp: {
+  otherTimestamp: {
     color: '#999999',
   },
   readReceipt: {
     marginLeft: 2,
   },
-  typingContainer: {
-    flexDirection: 'row',
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 4,
+    paddingVertical: 60,
   },
-  typingBubble: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
-    gap: 4,
+  emptyText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#333333',
   },
-  typingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#B39BD5',
+  emptySubtext: {
+    marginTop: 4,
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#999999',
+    textAlign: 'center',
+    paddingHorizontal: 40,
   },
   quickRepliesContainer: {
     backgroundColor: '#FFFFFF',
@@ -587,17 +947,48 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickReplyButton: {
-    backgroundColor: '#F5F0FF',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E8E0F0',
+  },
+  quickReplyBuyer: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#BBDEFB',
+  },
+  quickReplySeller: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#C8E6C9',
   },
   quickReplyText: {
     fontSize: 13,
     fontFamily: 'Poppins_500Medium',
-    color: '#502E82',
+  },
+  quickReplyTextBuyer: {
+    color: '#1976D2',
+  },
+  quickReplyTextSeller: {
+    color: '#388E3C',
+  },
+  sellerActionsBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    justifyContent: 'space-around',
+  },
+  sellerActionBtn: {
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  sellerActionText: {
+    fontSize: 11,
+    fontFamily: 'Poppins_500Medium',
+    color: '#666666',
+    marginTop: 2,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -637,9 +1028,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#B39BD5',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sendButtonBuyer: {
+    backgroundColor: '#2196F3',
+  },
+  sendButtonSeller: {
+    backgroundColor: '#4CAF50',
   },
   sendButtonDisabled: {
     backgroundColor: '#F0F0F0',

@@ -8,7 +8,7 @@ import MessagesListScreen from './MessagesListScreen';
 import ItemDetailsScreen from './ItemDetailsScreen';
 import ChatScreen from './ChatScreen';
 import CreateListingScreen from './CreateListingScreen';
-import { getListings, getTrendingListings, getRecentListings } from '../services/listingService';
+import { getListings, getTrendingListings, getRecentListings, subscribeToListings, unsubscribeFromListings } from '../services/listingService';
 
 export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const [searchText, setSearchText] = useState('');
@@ -59,6 +59,50 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   useEffect(() => {
     fetchListings();
   }, [fetchListings]);
+
+  // Real-time subscription for listing updates
+  useEffect(() => {
+    const subscription = subscribeToListings(
+      // On new listing added
+      (newListing) => {
+        if (newListing.status === 'approved' || newListing.status === 'active') {
+          // Add to recent items at the beginning
+          setRecentItems(prev => [newListing, ...prev.slice(0, 9)]);
+          // Also add to forYou items
+          setForYouItems(prev => [newListing, ...prev.slice(0, 9)]);
+        }
+      },
+      // On listing updated
+      (updatedListing, oldListing) => {
+        const updateInList = (list) =>
+          list.map(item => item.id === updatedListing.id ? updatedListing : item);
+
+        // If status changed to sold/deleted, remove from lists
+        if (updatedListing.status === 'sold' || updatedListing.status === 'deleted') {
+          const removeFromList = (list) => list.filter(item => item.id !== updatedListing.id);
+          setForYouItems(removeFromList);
+          setTrendingItems(removeFromList);
+          setRecentItems(removeFromList);
+        } else {
+          setForYouItems(updateInList);
+          setTrendingItems(updateInList);
+          setRecentItems(updateInList);
+        }
+      },
+      // On listing deleted
+      (deletedListing) => {
+        const removeFromList = (list) => list.filter(item => item.id !== deletedListing.id);
+        setForYouItems(removeFromList);
+        setTrendingItems(removeFromList);
+        setRecentItems(removeFromList);
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => {
+      unsubscribeFromListings(subscription);
+    };
+  }, []);
 
   // Pull to refresh handler
   const onRefresh = useCallback(() => {

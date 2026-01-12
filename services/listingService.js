@@ -3,6 +3,64 @@ import { supabase } from '../config/supabase';
 const STORAGE_BUCKET = 'listing-images';
 
 /**
+ * Subscribe to real-time listing changes
+ * @param {function} onInsert - Callback when a new listing is added
+ * @param {function} onUpdate - Callback when a listing is updated
+ * @param {function} onDelete - Callback when a listing is deleted
+ * @returns {object} - Subscription object with unsubscribe method
+ */
+export const subscribeToListings = (onInsert, onUpdate, onDelete) => {
+  const subscription = supabase
+    .channel('listings-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'listings',
+      },
+      (payload) => {
+        if (onInsert) onInsert(payload.new);
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'listings',
+      },
+      (payload) => {
+        if (onUpdate) onUpdate(payload.new, payload.old);
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'listings',
+      },
+      (payload) => {
+        if (onDelete) onDelete(payload.old);
+      }
+    )
+    .subscribe();
+
+  return subscription;
+};
+
+/**
+ * Unsubscribe from real-time listing changes
+ * @param {object} subscription - The subscription to remove
+ */
+export const unsubscribeFromListings = async (subscription) => {
+  if (subscription) {
+    await supabase.removeChannel(subscription);
+  }
+};
+
+/**
  * Upload an image to Supabase Storage
  * @param {string} uri - Local image URI
  * @param {string} userId - User's ID for folder organization
