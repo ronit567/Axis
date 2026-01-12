@@ -1,35 +1,75 @@
-import React, { useState, useRef } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  ScrollView, 
-  Image, 
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Image,
   Dimensions,
   Share,
   Alert,
-  Animated
+  Animated,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { getSellerProfile, getListings } from '../services/listingService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Dummy similar items
-const SIMILAR_ITEMS = [
-  { id: 's1', title: 'Similar Item 1', price: 35, condition: 'Good' },
-  { id: 's2', title: 'Similar Item 2', price: 40, condition: 'Like New' },
-  { id: 's3', title: 'Similar Item 3', price: 25, condition: 'Fair' },
-];
 
 export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onItemPress }) {
   const [isFavorited, setIsFavorited] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [sellerProfile, setSellerProfile] = useState(null);
+  const [sellerLoading, setSellerLoading] = useState(true);
+  const [similarItems, setSimilarItems] = useState([]);
   const heartScale = useRef(new Animated.Value(1)).current;
-  
-  // Mock multiple images for gallery
-  const images = [1, 2, 3]; // Simulating 3 images
+
+  // Get images from item or use placeholder
+  const images = item.images && item.images.length > 0 ? item.images : [null];
+
+  // Fetch seller profile on mount
+  useEffect(() => {
+    const fetchSellerData = async () => {
+      if (item.user_id || item.seller_id) {
+        const { profile } = await getSellerProfile(item.user_id || item.seller_id);
+        setSellerProfile(profile);
+      }
+      setSellerLoading(false);
+    };
+
+    const fetchSimilarItems = async () => {
+      const { listings } = await getListings({
+        category: item.category,
+        limit: 5,
+      });
+      // Filter out the current item
+      const filtered = listings.filter(l => l.id !== item.id);
+      setSimilarItems(filtered.slice(0, 3));
+    };
+
+    fetchSellerData();
+    fetchSimilarItems();
+  }, [item]);
+
+  // Format time posted
+  const getTimePosted = () => {
+    if (!item.created_at) return 'Recently';
+    const created = new Date(item.created_at);
+    const now = new Date();
+    const diffMs = now - created;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffMinutes > 0) return `${diffMinutes} min${diffMinutes > 1 ? 's' : ''} ago`;
+    return 'Just now';
+  };
+
+  const timePosted = getTimePosted();
+  const views = item.views || 0;
   
   const handleFavorite = () => {
     // Animate heart
@@ -85,10 +125,16 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
     const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     setCurrentImageIndex(index);
   };
-  
-  const timePosted = '2 days ago'; // Mock data
-  const views = 47; // Mock data
-  
+
+  // Get seller display name
+  const sellerName = sellerProfile
+    ? `${sellerProfile.first_name || ''} ${sellerProfile.last_name || ''}`.trim() || 'Seller'
+    : 'Loading...';
+
+  const sellerMeta = sellerProfile
+    ? `${sellerProfile.program || 'Student'}${sellerProfile.year_of_study ? ` • ${sellerProfile.year_of_study}` : ''}`
+    : '';
+
   return (
     <View style={styles.container}>
       {/* Header - Now overlaid on image */}
@@ -122,10 +168,10 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
             onScroll={handleImageScroll}
             scrollEventThrottle={16}
           >
-            {images.map((_, index) => (
+            {images.map((imageUrl, index) => (
               <View key={index} style={styles.imageContainer}>
-                <Image 
-                  source={require('../images/grey_circle.png')}
+                <Image
+                  source={imageUrl ? { uri: imageUrl } : require('../images/grey_circle.png')}
                   style={styles.itemImage}
                   resizeMode="cover"
                 />
@@ -192,52 +238,59 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           <View style={styles.descriptionSection}>
             <Text style={styles.sectionTitle}>Description</Text>
             <Text style={styles.descriptionText}>
-              This is a great {item.title.toLowerCase()} in {item.condition.toLowerCase()} condition. 
-              Perfect for students looking for quality items at affordable prices. 
-              Feel free to message me with any questions!
+              {item.description || `This is a great ${item.title.toLowerCase()} in ${item.condition.toLowerCase()} condition. Perfect for students looking for quality items at affordable prices. Feel free to message me with any questions!`}
             </Text>
           </View>
           
           {/* Meetup Preferences */}
-          <View style={styles.meetupSection}>
-            <Text style={styles.sectionTitle}>Meetup Preferences</Text>
-            <View style={styles.meetupCard}>
-              <View style={styles.meetupRow}>
-                <Ionicons name="location-outline" size={20} color="#B39BD5" />
-                <View style={styles.meetupInfo}>
-                  <Text style={styles.meetupLabel}>Preferred Location</Text>
-                  <Text style={styles.meetupValue}>Campus Library, Student Center</Text>
-                </View>
-              </View>
-              <View style={styles.meetupDivider} />
-              <View style={styles.meetupRow}>
-                <Ionicons name="calendar-outline" size={20} color="#B39BD5" />
-                <View style={styles.meetupInfo}>
-                  <Text style={styles.meetupLabel}>Availability</Text>
-                  <Text style={styles.meetupValue}>Weekdays 10am - 6pm</Text>
-                </View>
+          {(item.meetup_location || item.location || item.meetup_availability) && (
+            <View style={styles.meetupSection}>
+              <Text style={styles.sectionTitle}>Meetup Preferences</Text>
+              <View style={styles.meetupCard}>
+                {(item.meetup_location || item.location) && (
+                  <View style={styles.meetupRow}>
+                    <Ionicons name="location-outline" size={20} color="#B39BD5" />
+                    <View style={styles.meetupInfo}>
+                      <Text style={styles.meetupLabel}>Preferred Location</Text>
+                      <Text style={styles.meetupValue}>{item.meetup_location || item.location}</Text>
+                    </View>
+                  </View>
+                )}
+                {(item.meetup_location || item.location) && item.meetup_availability && (
+                  <View style={styles.meetupDivider} />
+                )}
+                {item.meetup_availability && (
+                  <View style={styles.meetupRow}>
+                    <Ionicons name="calendar-outline" size={20} color="#B39BD5" />
+                    <View style={styles.meetupInfo}>
+                      <Text style={styles.meetupLabel}>Availability</Text>
+                      <Text style={styles.meetupValue}>{item.meetup_availability}</Text>
+                    </View>
+                  </View>
+                )}
               </View>
             </View>
-          </View>
+          )}
 
           {/* Seller Info */}
           <View style={styles.sellerSection}>
             <Text style={styles.sectionTitle}>Seller</Text>
             <TouchableOpacity style={styles.sellerCard}>
               <View style={styles.sellerAvatar}>
-                <Ionicons name="person" size={32} color="#B39BD5" />
+                {sellerLoading ? (
+                  <ActivityIndicator size="small" color="#B39BD5" />
+                ) : (
+                  <Ionicons name="person" size={32} color="#B39BD5" />
+                )}
                 <View style={styles.onlineIndicator} />
               </View>
               <View style={styles.sellerInfo}>
-                <Text style={styles.sellerName}>John Doe</Text>
-                <Text style={styles.sellerMeta}>Computer Science • 3rd Year</Text>
+                <Text style={styles.sellerName}>{sellerName}</Text>
+                {sellerMeta ? (
+                  <Text style={styles.sellerMeta}>{sellerMeta}</Text>
+                ) : null}
                 <View style={styles.sellerStats}>
-                  <View style={styles.ratingContainer}>
-                    <Ionicons name="star" size={14} color="#FFB800" />
-                    <Text style={styles.ratingText}>4.8</Text>
-                  </View>
-                  <Text style={styles.sellerListings}>• 12 listings</Text>
-                  <Text style={styles.responseTime}>• Responds quickly</Text>
+                  <Text style={styles.responseTime}>Responds quickly</Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#CCCCCC" />
@@ -267,32 +320,36 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           </View>
           
           {/* Similar Items */}
-          <View style={styles.similarSection}>
-            <Text style={styles.sectionTitle}>Similar Items</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.similarList}
-            >
-              {SIMILAR_ITEMS.map((similarItem) => (
-                <TouchableOpacity 
-                  key={similarItem.id} 
-                  style={styles.similarCard}
-                  onPress={() => onItemPress && onItemPress(similarItem)}
-                >
-                  <View style={styles.similarImageContainer}>
-                    <Image 
-                      source={require('../images/grey_circle.png')}
-                      style={styles.similarImage}
-                      resizeMode="cover"
-                    />
-                  </View>
-                  <Text style={styles.similarTitle} numberOfLines={1}>{similarItem.title}</Text>
-                  <Text style={styles.similarPrice}>${similarItem.price}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+          {similarItems.length > 0 && (
+            <View style={styles.similarSection}>
+              <Text style={styles.sectionTitle}>Similar Items</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.similarList}
+              >
+                {similarItems.map((similarItem) => (
+                  <TouchableOpacity
+                    key={similarItem.id}
+                    style={styles.similarCard}
+                    onPress={() => onItemPress && onItemPress(similarItem)}
+                  >
+                    <View style={styles.similarImageContainer}>
+                      <Image
+                        source={similarItem.images && similarItem.images.length > 0
+                          ? { uri: similarItem.images[0] }
+                          : require('../images/grey_circle.png')}
+                        style={styles.similarImage}
+                        resizeMode="cover"
+                      />
+                    </View>
+                    <Text style={styles.similarTitle} numberOfLines={1}>{similarItem.title}</Text>
+                    <Text style={styles.similarPrice}>${similarItem.price}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
           
           {/* Bottom Spacer */}
           <View style={{ height: 120 }} />
@@ -301,16 +358,16 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
 
       {/* Bottom Action Bar */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.offerButton}
           onPress={handleMakeOffer}
         >
           <MaterialCommunityIcons name="tag-outline" size={20} color="#B39BD5" />
           <Text style={styles.offerButtonText}>Make Offer</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.chatButton}
-          onPress={() => onChatWithSeller(item)}
+          onPress={() => onChatWithSeller({ ...item, sellerProfile })}
         >
           <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
           <Text style={styles.chatButtonText}>Message Seller</Text>

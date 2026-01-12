@@ -147,9 +147,14 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   
   const handleChatWithSeller = (item) => {
     setSelectedItem(item);
+    // Get seller name from the item's seller profile if available
+    const sellerName = item.sellerProfile
+      ? `${item.sellerProfile.first_name || ''} ${item.sellerProfile.last_name || ''}`.trim() || 'Seller'
+      : 'Seller';
     setSelectedChat({
-      sellerName: 'John Doe',
+      sellerName,
       itemTitle: item.title,
+      sellerId: item.user_id || item.seller_id,
     });
     setCurrentScreen('chat');
   };
