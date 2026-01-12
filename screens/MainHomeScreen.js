@@ -1,5 +1,5 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable } from 'react-native';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ListingCard from '../components/explore/ListingCard';
 import FilterModal from '../components/explore/FilterModal';
@@ -7,30 +7,10 @@ import ActiveFilters from '../components/explore/ActiveFilters';
 import MessagesListScreen from './MessagesListScreen';
 import ItemDetailsScreen from './ItemDetailsScreen';
 import ChatScreen from './ChatScreen';
+import CreateListingScreen from './CreateListingScreen';
+import { getListings, getTrendingListings, getRecentListings } from '../services/listingService';
 
-// Dummy data for home page sections
-const FOR_YOU_ITEMS = [
-  { id: '1', title: 'Calculus Textbook', price: 45, condition: 'Like New', category: 'Books' },
-  { id: '2', title: 'Desk Lamp', price: 20, condition: 'Good', category: 'Furniture' },
-  { id: '3', title: 'Winter Jacket', price: 60, condition: 'Like New', category: 'Clothing' },
-  { id: '4', title: 'Laptop Stand', price: 35, condition: 'Fair', category: 'Electronics' },
-];
-
-const TRENDING_ITEMS = [
-  { id: '5', title: 'Biology Notes', price: 15, condition: 'Good', category: 'Books' },
-  { id: '6', title: 'Mini Fridge', price: 80, condition: 'Like New', category: 'Appliances' },
-  { id: '7', title: 'Graphing Calculator', price: 50, condition: 'Like New', category: 'Electronics' },
-  { id: '8', title: 'Office Chair', price: 70, condition: 'Fair', category: 'Furniture' },
-];
-
-const RECENTLY_LISTED = [
-  { id: '9', title: 'Physics Textbook', price: 55, condition: 'Good', category: 'Books' },
-  { id: '10', title: 'Desk Organizer', price: 12, condition: 'Like New', category: 'Furniture' },
-  { id: '11', title: 'Backpack', price: 30, condition: 'Good', category: 'Clothing' },
-  { id: '12', title: 'Wireless Mouse', price: 18, condition: 'Like New', category: 'Electronics' },
-];
-
-export default function MainHomeScreen({ firstName, onLogout }) {
+export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const [searchText, setSearchText] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -41,11 +21,50 @@ export default function MainHomeScreen({ firstName, onLogout }) {
     minPrice: 0,
     maxPrice: 100,
   });
+
+  // Listings data state
+  const [forYouItems, setForYouItems] = useState([]);
+  const [trendingItems, setTrendingItems] = useState([]);
+  const [recentItems, setRecentItems] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState('home');
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
+
+  // Fetch listings from Supabase
+  const fetchListings = useCallback(async () => {
+    try {
+      // Fetch all three sections in parallel
+      const [forYouResult, trendingResult, recentResult] = await Promise.all([
+        getListings({ limit: 10 }),
+        getTrendingListings(10),
+        getRecentListings(10),
+      ]);
+
+      setForYouItems(forYouResult.listings || []);
+      setTrendingItems(trendingResult.listings || []);
+      setRecentItems(recentResult.listings || []);
+    } catch (error) {
+      console.error('Error fetching listings:', error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchListings();
+  }, [fetchListings]);
+
+  // Pull to refresh handler
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchListings();
+  }, [fetchListings]);
   
   
   const handlePinkCirclePress = () => {
@@ -112,9 +131,9 @@ export default function MainHomeScreen({ firstName, onLogout }) {
   };
   
   // Apply filters to each section using useMemo for performance
-  const filteredForYou = useMemo(() => filterItems(FOR_YOU_ITEMS), [filters, searchText]);
-  const filteredTrending = useMemo(() => filterItems(TRENDING_ITEMS), [filters, searchText]);
-  const filteredRecentlyListed = useMemo(() => filterItems(RECENTLY_LISTED), [filters, searchText]);
+  const filteredForYou = useMemo(() => filterItems(forYouItems), [filters, searchText, forYouItems]);
+  const filteredTrending = useMemo(() => filterItems(trendingItems), [filters, searchText, trendingItems]);
+  const filteredRecentlyListed = useMemo(() => filterItems(recentItems), [filters, searchText, recentItems]);
   
   // Navigation handlers
   const handleItemPress = (item) => {
@@ -150,6 +169,17 @@ export default function MainHomeScreen({ firstName, onLogout }) {
     setCurrentScreen('messagesList');
     setSelectedChat(null);
   };
+
+  const handleSellPress = () => {
+    setCurrentScreen('createListing');
+  };
+
+  const handleListingCreated = (listing) => {
+    // Go back to home after successful listing creation
+    setCurrentScreen('home');
+    // Refresh listings to show the new one
+    fetchListings();
+  };
   
   // Render different screens based on navigation state
   if (currentScreen === 'messagesList') {
@@ -173,10 +203,20 @@ export default function MainHomeScreen({ firstName, onLogout }) {
   
   if (currentScreen === 'chat') {
     return (
-      <ChatScreen 
+      <ChatScreen
         chat={selectedChat}
         item={selectedItem}
         onBack={selectedItem ? handleBackToHome : handleBackToMessages}
+      />
+    );
+  }
+
+  if (currentScreen === 'createListing') {
+    return (
+      <CreateListingScreen
+        onBack={handleBackToHome}
+        onSuccess={handleListingCreated}
+        userId={userId}
       />
     );
   }
@@ -356,14 +396,30 @@ export default function MainHomeScreen({ firstName, onLogout }) {
         </Animated.View>
       </View>
       
-      <ScrollView 
+      <ScrollView
         style={[
           styles.content,
           activeFilterCount > 0 && styles.contentWithFilters
-        ]} 
+        ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor="#B39BD5"
+            colors={['#B39BD5']}
+          />
+        }
       >
-        {/* For You Section */}
+        {/* Loading State */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#B39BD5" />
+            <Text style={styles.loadingText}>Loading listings...</Text>
+          </View>
+        ) : (
+          <>
+            {/* For You Section */}
         {filteredForYou.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -431,8 +487,19 @@ export default function MainHomeScreen({ firstName, onLogout }) {
           <View style={styles.noResultsContainer}>
             <Ionicons name="search-outline" size={64} color="#999999" />
             <Text style={styles.noResultsText}>No items found</Text>
-            <Text style={styles.noResultsSubtext}>Try adjusting your filters or search terms</Text>
+            <Text style={styles.noResultsSubtext}>
+              {forYouItems.length === 0 && trendingItems.length === 0 && recentItems.length === 0
+                ? 'Be the first to list an item!'
+                : 'Try adjusting your filters or search terms'}
+            </Text>
+            {forYouItems.length === 0 && trendingItems.length === 0 && recentItems.length === 0 && (
+              <TouchableOpacity style={styles.createFirstButton} onPress={handleSellPress}>
+                <Text style={styles.createFirstButtonText}>Create Listing</Text>
+              </TouchableOpacity>
+            )}
           </View>
+        )}
+          </>
         )}
       </ScrollView>
       
@@ -466,7 +533,7 @@ export default function MainHomeScreen({ firstName, onLogout }) {
           <Text style={styles.navLabel}>Explore</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.sellButton}>
+        <TouchableOpacity style={styles.sellButton} onPress={handleSellPress}>
           <View style={styles.addButtonCircle}>
             <Ionicons name="add" size={32} color="#FFFFFF" />
           </View>
@@ -805,5 +872,29 @@ const styles = StyleSheet.create({
     color: '#999999',
     marginTop: 8,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#999999',
+    marginTop: 12,
+  },
+  createFirstButton: {
+    marginTop: 20,
+    backgroundColor: '#502E82',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  createFirstButtonText: {
+    fontSize: 14,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#FFFFFF',
   },
 });
