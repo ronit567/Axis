@@ -21,3 +21,11 @@ web-build/
 .env
 .env.local
 .env.*.local
+
+# Internal planning / reference docs (not for the public repo)
+docs/
+
+# Editor swap files
+*.swp
+
+.claude
