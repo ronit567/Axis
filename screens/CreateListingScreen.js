@@ -15,12 +15,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { createListing, uploadListingImages } from '../services/listingService';
+import { useMutation } from 'convex/react';
+import { api } from '../convex/_generated/api';
 
 const CATEGORIES = ['Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'];
 const CONDITIONS = ['Like New', 'Good', 'Fair'];
 
-export default function CreateListingScreen({ onBack, onSuccess, userId }) {
+export default function CreateListingScreen({ onBack, onSuccess }) {
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const createListing = useMutation(api.listings.create);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
@@ -120,40 +123,43 @@ export default function CreateListingScreen({ onBack, onSuccess, userId }) {
     setIsLoading(true);
 
     try {
-      // Upload images first if any
-      let imageUrls = [];
-      if (images.length > 0) {
-        const { urls, errors } = await uploadListingImages(images, userId);
-        if (errors) {
-          console.error('Some images failed to upload:', errors);
+      // Upload each image to Convex storage: get a one-time upload URL, POST
+      // the file bytes, keep the returned storage ID for the listing.
+      const storageIds = [];
+      for (const uri of images) {
+        const uploadUrl = await generateUploadUrl();
+        const file = await fetch(uri);
+        const blob = await file.blob();
+        const result = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': blob.type || 'image/jpeg' },
+          body: blob,
+        });
+        if (!result.ok) {
+          throw new Error(`Image upload failed (${result.status})`);
         }
-        imageUrls = urls;
+        const { storageId } = await result.json();
+        storageIds.push(storageId);
       }
 
-      // Create the listing
-      const { listing, error } = await createListing({
+      // Create the listing (seller is derived from the session server-side)
+      const listingId = await createListing({
         title: title.trim(),
-        description: description.trim(),
+        description: description.trim() || undefined,
         price: parseFloat(price),
         category,
         condition,
-        images: imageUrls,
-        meetupLocation: meetupLocation.trim(),
-        meetupAvailability: meetupAvailability.trim(),
+        images: storageIds,
+        meetupLocation: meetupLocation.trim() || undefined,
+        meetupAvailability: meetupAvailability.trim() || undefined,
       });
 
-      if (error) {
-        Alert.alert('Error', error.message || 'Failed to create listing. Please try again.');
-        setIsLoading(false);
-        return;
-      }
-
       Alert.alert('Success', 'Your listing has been posted!', [
-        { text: 'OK', onPress: () => onSuccess && onSuccess(listing) },
+        { text: 'OK', onPress: () => onSuccess && onSuccess(listingId) },
       ]);
     } catch (error) {
       console.error('Submit error:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert('Error', 'Failed to create listing. Please try again.');
     }
 
     setIsLoading(false);

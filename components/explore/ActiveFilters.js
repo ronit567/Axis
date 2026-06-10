@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { PRICE_CAP } from './filters';
 
 export default function ActiveFilters({
   filters,
@@ -8,7 +9,7 @@ export default function ActiveFilters({
   const activeFilterCount = [
     filters.category !== 'All',
     filters.condition !== 'All',
-    filters.minPrice > 0 || filters.maxPrice < 100,
+    filters.minPrice > 0 || filters.maxPrice < PRICE_CAP,
   ].filter(Boolean).length;
 
   if (activeFilterCount === 0) {
@@ -34,13 +35,13 @@ export default function ActiveFilters({
             </Pressable>
           </View>
         )}
-        {(filters.minPrice > 0 || filters.maxPrice < 100) && (
+        {(filters.minPrice > 0 || filters.maxPrice < PRICE_CAP) && (
           <View style={styles.filterChip}>
             <Text style={styles.filterText}>
-              ${filters.minPrice}-${filters.maxPrice}
+              ${filters.minPrice}-{filters.maxPrice >= PRICE_CAP ? `$${PRICE_CAP}+` : `$${filters.maxPrice}`}
             </Text>
             <Pressable
-              onPress={() => onUpdateFilters({ ...filters, minPrice: 0, maxPrice: 100 })}
+              onPress={() => onUpdateFilters({ ...filters, minPrice: 0, maxPrice: PRICE_CAP })}
             >
               <Text style={styles.closeIcon}>✕</Text>
             </Pressable>

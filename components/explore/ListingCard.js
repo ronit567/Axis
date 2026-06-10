@@ -1,9 +1,10 @@
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 
 export default function ListingCard({ listing, onPress }) {
-  // Get the first image URL or use placeholder
-  const imageSource = listing.images && listing.images.length > 0
-    ? { uri: listing.images[0] }
+  // Get the first image URL or use placeholder (imageUrls is resolved
+  // server-side from the storage IDs in listing.images)
+  const imageSource = listing.imageUrls && listing.imageUrls[0]
+    ? { uri: listing.imageUrls[0] }
     : require('../../images/grey_circle.png');
 
   return (

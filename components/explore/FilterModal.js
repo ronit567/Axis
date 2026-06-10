@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import Slider from '@react-native-community/slider';
+import { PRICE_CAP } from './filters';
 
 const CATEGORIES = ['All', 'Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'];
 const CONDITIONS = ['All', 'Like New', 'Good', 'Fair'];
@@ -90,14 +91,16 @@ export default function FilterModal({
               <Text style={styles.filterSectionTitle}>Price Range</Text>
               <View style={styles.priceRangeContainer}>
                 <Text style={styles.priceLabel}>${filters.minPrice}</Text>
-                <Text style={styles.priceLabel}>${filters.maxPrice}</Text>
+                <Text style={styles.priceLabel}>
+                  {filters.maxPrice >= PRICE_CAP ? `$${PRICE_CAP}+` : `$${filters.maxPrice}`}
+                </Text>
               </View>
               <View style={styles.sliderContainer}>
                 <Text style={styles.sliderLabel}>Min</Text>
                 <Slider
                   style={styles.slider}
                   minimumValue={0}
-                  maximumValue={100}
+                  maximumValue={PRICE_CAP}
                   step={5}
                   value={filters.minPrice}
                   onValueChange={(value) => updateFilter('minPrice', value)}
@@ -111,7 +114,7 @@ export default function FilterModal({
                 <Slider
                   style={styles.slider}
                   minimumValue={0}
-                  maximumValue={100}
+                  maximumValue={PRICE_CAP}
                   step={5}
                   value={filters.maxPrice}
                   onValueChange={(value) => updateFilter('maxPrice', value)}

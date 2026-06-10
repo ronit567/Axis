@@ -13,65 +13,40 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { getSellerProfile, getListings, markListingAsSold, deleteListing } from '../services/listingService';
-import { supabase } from '../config/supabase';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../convex/_generated/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onItemPress, onEditListing }) {
   const [isFavorited, setIsFavorited] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [sellerProfile, setSellerProfile] = useState(null);
-  const [sellerLoading, setSellerLoading] = useState(true);
-  const [similarItems, setSimilarItems] = useState([]);
-  const [currentUserId, setCurrentUserId] = useState(null);
-  const [isOwner, setIsOwner] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
 
   // Get images from item or use placeholder
-  const images = item.images && item.images.length > 0 ? item.images : [null];
+  const images = item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls : [null];
 
-  // Get current user and check ownership
+  // All reactive: ownership, seller card, and similar items
+  const me = useQuery(api.users.current);
+  const isOwner = me != null && me._id === item.sellerId;
+  const sellerProfile = useQuery(api.users.publicProfile, { userId: item.sellerId });
+  const sellerLoading = sellerProfile === undefined;
+  const categoryFeed = useQuery(api.listings.feed, { category: item.category, limit: 5 });
+  const similarItems = (categoryFeed ?? []).filter((l) => l._id !== item._id).slice(0, 3);
+
+  const markListingAsSold = useMutation(api.listings.markSold);
+  const removeListing = useMutation(api.listings.remove);
+  const incrementViews = useMutation(api.listings.incrementViews);
+
+  // Count the view once per opened listing
   useEffect(() => {
-    const checkOwnership = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setCurrentUserId(user.id);
-        const itemOwnerId = item.user_id || item.seller_id;
-        setIsOwner(user.id === itemOwnerId);
-      }
-    };
-    checkOwnership();
-  }, [item]);
-
-  // Fetch seller profile on mount
-  useEffect(() => {
-    const fetchSellerData = async () => {
-      if (item.user_id || item.seller_id) {
-        const { profile } = await getSellerProfile(item.user_id || item.seller_id);
-        setSellerProfile(profile);
-      }
-      setSellerLoading(false);
-    };
-
-    const fetchSimilarItems = async () => {
-      const { listings } = await getListings({
-        category: item.category,
-        limit: 5,
-      });
-      // Filter out the current item
-      const filtered = listings.filter(l => l.id !== item.id);
-      setSimilarItems(filtered.slice(0, 3));
-    };
-
-    fetchSellerData();
-    fetchSimilarItems();
-  }, [item]);
+    incrementViews({ id: item._id });
+  }, [item._id]);
 
   // Format time posted
   const getTimePosted = () => {
-    if (!item.created_at) return 'Recently';
-    const created = new Date(item.created_at);
+    if (!item._creationTime) return 'Recently';
+    const created = new Date(item._creationTime);
     const now = new Date();
     const diffMs = now - created;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -147,13 +122,13 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
         {
           text: 'Mark as Sold',
           onPress: async () => {
-            const { error } = await markListingAsSold(item.id);
-            if (error) {
-              Alert.alert('Error', 'Failed to mark item as sold. Please try again.');
-            } else {
+            try {
+              await markListingAsSold({ id: item._id });
               Alert.alert('Success', 'Item marked as sold!', [
                 { text: 'OK', onPress: onBack }
               ]);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to mark item as sold. Please try again.');
             }
           }
         },
@@ -171,13 +146,13 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const { error } = await deleteListing(item.id);
-            if (error) {
-              Alert.alert('Error', 'Failed to delete listing. Please try again.');
-            } else {
+            try {
+              await removeListing({ id: item._id });
               Alert.alert('Deleted', 'Your listing has been removed.', [
                 { text: 'OK', onPress: onBack }
               ]);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete listing. Please try again.');
             }
           }
         },
@@ -204,11 +179,11 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
 
   // Get seller display name
   const sellerName = sellerProfile
-    ? `${sellerProfile.first_name || ''} ${sellerProfile.last_name || ''}`.trim() || 'Seller'
+    ? `${sellerProfile.firstName || ''} ${sellerProfile.lastName || ''}`.trim() || 'Seller'
     : 'Loading...';
 
   const sellerMeta = sellerProfile
-    ? `${sellerProfile.program || 'Student'}${sellerProfile.year_of_study ? ` • ${sellerProfile.year_of_study}` : ''}`
+    ? `${sellerProfile.program || 'Student'}${sellerProfile.yearOfStudy ? ` • ${sellerProfile.yearOfStudy}` : ''}`
     : '';
 
   return (
@@ -366,28 +341,28 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           </View>
 
           {/* Meetup Preferences */}
-          {(item.meetup_location || item.location || item.meetup_availability) && (
+          {(item.meetupLocation || item.meetupAvailability) && (
             <View style={styles.meetupSection}>
               <Text style={styles.sectionTitle}>Meetup Preferences</Text>
               <View style={styles.meetupCard}>
-                {(item.meetup_location || item.location) && (
+                {item.meetupLocation && (
                   <View style={styles.meetupRow}>
                     <Ionicons name="location-outline" size={20} color="#B39BD5" />
                     <View style={styles.meetupInfo}>
                       <Text style={styles.meetupLabel}>Preferred Location</Text>
-                      <Text style={styles.meetupValue}>{item.meetup_location || item.location}</Text>
+                      <Text style={styles.meetupValue}>{item.meetupLocation}</Text>
                     </View>
                   </View>
                 )}
-                {(item.meetup_location || item.location) && item.meetup_availability && (
+                {item.meetupLocation && item.meetupAvailability && (
                   <View style={styles.meetupDivider} />
                 )}
-                {item.meetup_availability && (
+                {item.meetupAvailability && (
                   <View style={styles.meetupRow}>
                     <Ionicons name="calendar-outline" size={20} color="#B39BD5" />
                     <View style={styles.meetupInfo}>
                       <Text style={styles.meetupLabel}>Availability</Text>
-                      <Text style={styles.meetupValue}>{item.meetup_availability}</Text>
+                      <Text style={styles.meetupValue}>{item.meetupAvailability}</Text>
                     </View>
                   </View>
                 )}
@@ -481,14 +456,14 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
               >
                 {similarItems.map((similarItem) => (
                   <TouchableOpacity
-                    key={similarItem.id}
+                    key={similarItem._id}
                     style={styles.similarCard}
                     onPress={() => onItemPress && onItemPress(similarItem)}
                   >
                     <View style={styles.similarImageContainer}>
                       <Image
-                        source={similarItem.images && similarItem.images.length > 0
-                          ? { uri: similarItem.images[0] }
+                        source={similarItem.imageUrls && similarItem.imageUrls[0]
+                          ? { uri: similarItem.imageUrls[0] }
                           : require('../images/grey_circle.png')}
                         style={styles.similarImage}
                         resizeMode="cover"
@@ -543,7 +518,7 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.chatButton}
-            onPress={() => onChatWithSeller({ ...item, sellerProfile })}
+            onPress={() => onChatWithSeller(item)}
           >
             <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
             <Text style={styles.chatButtonText}>Message Seller</Text>

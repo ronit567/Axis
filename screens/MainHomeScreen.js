@@ -1,116 +1,39 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState, useRef, useMemo } from 'react';
+import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
 import ListingCard from '../components/explore/ListingCard';
 import FilterModal from '../components/explore/FilterModal';
 import ActiveFilters from '../components/explore/ActiveFilters';
+import { DEFAULT_FILTERS, PRICE_CAP } from '../components/explore/filters';
 import MessagesListScreen from './MessagesListScreen';
 import ItemDetailsScreen from './ItemDetailsScreen';
 import ChatScreen from './ChatScreen';
 import CreateListingScreen from './CreateListingScreen';
-import { getListings, getTrendingListings, getRecentListings, subscribeToListings, unsubscribeFromListings } from '../services/listingService';
 
 export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const [searchText, setSearchText] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    category: 'All',
-    condition: 'All',
-    minPrice: 0,
-    maxPrice: 100,
-  });
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
 
-  // Listings data state
-  const [forYouItems, setForYouItems] = useState([]);
-  const [trendingItems, setTrendingItems] = useState([]);
-  const [recentItems, setRecentItems] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState('home');
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
 
-  // Fetch listings from Supabase
-  const fetchListings = useCallback(async () => {
-    try {
-      // Fetch all three sections in parallel
-      const [forYouResult, trendingResult, recentResult] = await Promise.all([
-        getListings({ limit: 10 }),
-        getTrendingListings(10),
-        getRecentListings(10),
-      ]);
+  // Reactive listings — Convex pushes updates, so there's no fetch, no
+  // realtime subscription to manage, and no pull-to-refresh needed.
+  const feed = useQuery(api.listings.feed, { limit: 50 });
+  const trendingItems = useQuery(api.listings.trending, { limit: 10 });
 
-      setForYouItems(forYouResult.listings || []);
-      setTrendingItems(trendingResult.listings || []);
-      setRecentItems(recentResult.listings || []);
-    } catch (error) {
-      console.error('Error fetching listings:', error);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
+  const isLoading = feed === undefined || trendingItems === undefined;
+  const forYouItems = feed ?? [];
+  const recentItems = useMemo(() => (feed ?? []).slice(0, 10), [feed]);
 
-  // Initial fetch on mount
-  useEffect(() => {
-    fetchListings();
-  }, [fetchListings]);
 
-  // Real-time subscription for listing updates
-  useEffect(() => {
-    const subscription = subscribeToListings(
-      // On new listing added
-      (newListing) => {
-        if (newListing.status === 'approved' || newListing.status === 'active') {
-          // Add to recent items at the beginning
-          setRecentItems(prev => [newListing, ...prev.slice(0, 9)]);
-          // Also add to forYou items
-          setForYouItems(prev => [newListing, ...prev.slice(0, 9)]);
-        }
-      },
-      // On listing updated
-      (updatedListing, oldListing) => {
-        const updateInList = (list) =>
-          list.map(item => item.id === updatedListing.id ? updatedListing : item);
-
-        // If status changed to sold/deleted, remove from lists
-        if (updatedListing.status === 'sold' || updatedListing.status === 'deleted') {
-          const removeFromList = (list) => list.filter(item => item.id !== updatedListing.id);
-          setForYouItems(removeFromList);
-          setTrendingItems(removeFromList);
-          setRecentItems(removeFromList);
-        } else {
-          setForYouItems(updateInList);
-          setTrendingItems(updateInList);
-          setRecentItems(updateInList);
-        }
-      },
-      // On listing deleted
-      (deletedListing) => {
-        const removeFromList = (list) => list.filter(item => item.id !== deletedListing.id);
-        setForYouItems(removeFromList);
-        setTrendingItems(removeFromList);
-        setRecentItems(removeFromList);
-      }
-    );
-
-    // Cleanup subscription on unmount
-    return () => {
-      unsubscribeFromListings(subscription);
-    };
-  }, []);
-
-  // Pull to refresh handler
-  const onRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    fetchListings();
-  }, [fetchListings]);
-  
-  
   const handlePinkCirclePress = () => {
     const toValue = isExpanded ? 0 : 1;
     setIsExpanded(!isExpanded);
@@ -126,16 +49,11 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const activeFilterCount = [
     filters.category !== 'All',
     filters.condition !== 'All',
-    filters.minPrice > 0 || filters.maxPrice < 100,
+    filters.minPrice > 0 || filters.maxPrice < PRICE_CAP,
   ].filter(Boolean).length;
-  
+
   const resetFilters = () => {
-    setFilters({
-      category: 'All',
-      condition: 'All',
-      minPrice: 0,
-      maxPrice: 100,
-    });
+    setFilters(DEFAULT_FILTERS);
   };
   
   const handleCategoryFilterPress = (category) => {
@@ -155,8 +73,11 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         return false;
       }
       
-      // Price range filter
-      if (item.price < filters.minPrice || item.price > filters.maxPrice) {
+      // Price range filter (maxPrice at the cap means "no upper limit")
+      if (item.price < filters.minPrice) {
+        return false;
+      }
+      if (filters.maxPrice < PRICE_CAP && item.price > filters.maxPrice) {
         return false;
       }
       
@@ -176,7 +97,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   
   // Apply filters to each section using useMemo for performance
   const filteredForYou = useMemo(() => filterItems(forYouItems), [filters, searchText, forYouItems]);
-  const filteredTrending = useMemo(() => filterItems(trendingItems), [filters, searchText, trendingItems]);
+  const filteredTrending = useMemo(() => filterItems(trendingItems ?? []), [filters, searchText, trendingItems]);
   const filteredRecentlyListed = useMemo(() => filterItems(recentItems), [filters, searchText, recentItems]);
   
   // Navigation handlers
@@ -191,14 +112,15 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   
   const handleChatWithSeller = (item) => {
     setSelectedItem(item);
-    // Get seller name from the item's seller profile if available
-    const sellerName = item.sellerProfile
-      ? `${item.sellerProfile.first_name || ''} ${item.sellerProfile.last_name || ''}`.trim() || 'Seller'
+    // Seller summary comes hydrated on every Convex listing
+    const sellerName = item.seller
+      ? `${item.seller.firstName || ''} ${item.seller.lastName || ''}`.trim() || 'Seller'
       : 'Seller';
     setSelectedChat({
       sellerName,
       itemTitle: item.title,
-      sellerId: item.user_id || item.seller_id,
+      sellerId: item.sellerId,
+      listingId: item._id,
     });
     setCurrentScreen('chat');
   };
@@ -223,11 +145,9 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     setCurrentScreen('createListing');
   };
 
-  const handleListingCreated = (listing) => {
-    // Go back to home after successful listing creation
+  const handleListingCreated = () => {
+    // Go back to home — the reactive feed query picks up the new listing
     setCurrentScreen('home');
-    // Refresh listings to show the new one
-    fetchListings();
   };
   
   // Render different screens based on navigation state
@@ -265,7 +185,6 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
       <CreateListingScreen
         onBack={handleBackToHome}
         onSuccess={handleListingCreated}
-        userId={userId}
       />
     );
   }
@@ -451,14 +370,6 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
           activeFilterCount > 0 && styles.contentWithFilters
         ]}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={onRefresh}
-            tintColor="#B39BD5"
-            colors={['#B39BD5']}
-          />
-        }
       >
         {/* Loading State */}
         {isLoading ? (
@@ -478,7 +389,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
               data={filteredForYou}
               horizontal
               showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <View style={styles.horizontalCard}>
                   <ListingCard listing={item} onPress={() => handleItemPress(item)} />
@@ -499,7 +410,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
               data={filteredTrending}
               horizontal
               showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <View style={styles.horizontalCard}>
                   <ListingCard listing={item} onPress={() => handleItemPress(item)} />
@@ -520,7 +431,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
               data={filteredRecentlyListed}
               horizontal
               showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <View style={styles.horizontalCard}>
                   <ListingCard listing={item} onPress={() => handleItemPress(item)} />
