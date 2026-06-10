@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated, ActivityIndicator } from 'react-native';
-import { signIn, getUserProfile } from '../services/authService';
+import { useAuthActions } from '@convex-dev/auth/react';
 import ErrorModal from '../components/ErrorModal';
 
-export default function SignInScreen({ 
-  fadeAnim, 
-  signInTranslateX, 
-  email, 
-  setEmail, 
-  password, 
-  setPassword, 
+export default function SignInScreen({
+  fadeAnim,
+  signInTranslateX,
+  email,
+  setEmail,
+  password,
+  setPassword,
   onBack,
-  onSignIn,
-  onAuthSuccess
+  onSignIn
 }) {
+  const { signIn } = useAuthActions();
   const [isLoading, setIsLoading] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -44,38 +44,18 @@ export default function SignInScreen({
     setIsLoading(true);
 
     try {
-      const { user, session, error } = await signIn(email, password);
+      // Convex Auth: verifies credentials server-side and stores the session.
+      await signIn('password', {
+        flow: 'signIn',
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
-      if (error) {
-        console.error('Sign in error:', error);
-        let message = 'Failed to sign in. Please check your credentials.';
-        
-        if (error.message?.includes('Invalid login credentials')) {
-          message = 'Invalid email or password. Please try again.';
-        } else if (error.message?.includes('Email not confirmed')) {
-          message = 'Please verify your email address before signing in.';
-        }
-        
-        setErrorMessage(message);
-        setShowErrorModal(true);
-        setIsLoading(false);
-        return;
-      }
-
-      if (user) {
-        // Fetch user profile
-        const { profile } = await getUserProfile(user.id);
-        
-        if (onAuthSuccess) {
-          onAuthSuccess(user, profile);
-        }
-        
-        // Navigate to main home
-        onSignIn();
-      }
+      // Navigate to main home (profile loads reactively via api.users.current)
+      onSignIn();
     } catch (error) {
       console.error('Sign in error:', error);
-      setErrorMessage('An error occurred during sign in. Please try again.');
+      setErrorMessage('Invalid email or password. Please try again.');
       setShowErrorModal(true);
     } finally {
       setIsLoading(false);

@@ -1,15 +1,39 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, Animated, ActivityIndicator } from 'react-native';
+import { View, Text, Animated, ActivityIndicator, Platform } from 'react-native';
 import { useFonts, HammersmithOne_400Regular } from '@expo-google-fonts/hammersmith-one';
 import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from '@expo-google-fonts/poppins';
+import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
+import { useConvexAuth, useQuery } from 'convex/react';
+import * as SecureStore from 'expo-secure-store';
+import { convex } from './config/convex';
+import { api } from './convex/_generated/api';
 import HomeScreen from './screens/HomeScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import ProfileSetupScreen from './screens/ProfileSetupScreen';
 import MainHomeScreen from './screens/MainHomeScreen';
-import { getCurrentSession, getCurrentUser, getUserProfile, signUp, signOut } from './services/authService';
+
+// Sessions persist in the device keychain (fixes the old "signed out on every
+// cold start" bug). SecureStore is native-only; on web Convex Auth falls back
+// to its default storage.
+const secureStorage = {
+  getItem: SecureStore.getItemAsync,
+  setItem: SecureStore.setItemAsync,
+  removeItem: SecureStore.deleteItemAsync,
+};
 
 export default function App() {
+  return (
+    <ConvexAuthProvider
+      client={convex}
+      storage={Platform.OS === 'ios' || Platform.OS === 'android' ? secureStorage : undefined}
+    >
+      <AppContent />
+    </ConvexAuthProvider>
+  );
+}
+
+function AppContent() {
   const [currentScreen, setCurrentScreen] = useState('home');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,12 +44,15 @@ export default function App() {
   const [yearOfStudy, setYearOfStudy] = useState('');
   const [socials, setSocials] = useState('');
   const [aboutYou, setAboutYou] = useState('');
-  const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isSigningUp, setIsSigningUp] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  
+
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
+  const { signIn, signOut } = useAuthActions();
+  // Reactive profile — updates everywhere the moment it changes.
+  const profile = useQuery(api.users.current);
+
   let [fontsLoaded] = useFonts({
     HammersmithOne_400Regular,
     Poppins_400Regular,
@@ -33,38 +60,12 @@ export default function App() {
     Poppins_600SemiBold,
   });
 
-  // Check for existing session on app load
+  // Restored session on cold start → skip straight to the main screen.
   useEffect(() => {
-    checkUserSession();
-  }, []);
-
-  const checkUserSession = async () => {
-    try {
-      const { session } = await getCurrentSession();
-      
-      if (session?.user) {
-        const { user: currentUser } = await getCurrentUser();
-        setUser(currentUser);
-        
-        // Fetch user profile
-        const { profile } = await getUserProfile(currentUser.id);
-        if (profile) {
-          setUserProfile(profile);
-          setFirstName(profile.first_name || '');
-          setLastName(profile.last_name || '');
-          setEmail(profile.email || '');
-          setProgram(profile.program || '');
-          setYearOfStudy(profile.year_of_study || '');
-          setAboutYou(profile.bio || '');
-          setCurrentScreen('mainhome');
-        }
-      }
-    } catch (error) {
-      console.error('Session check error:', error);
-    } finally {
-      setIsLoading(false);
+    if (!authLoading && isAuthenticated && currentScreen === 'home') {
+      setCurrentScreen('mainhome');
     }
-  };
+  }, [authLoading, isAuthenticated, currentScreen]);
 
   useEffect(() => {
     if (currentScreen === 'signin' || currentScreen === 'signup' || currentScreen === 'profileSetup') {
@@ -163,66 +164,46 @@ export default function App() {
   };
 
   const handleProfileComplete = async () => {
-    // Create account with Supabase if user doesn't exist yet
-    if (!user) {
-      setIsLoading(true);
+    // New sign-up: one call creates the account AND the profile row — the
+    // server (convex/auth.ts) builds the user doc from these params and
+    // rejects non-@uwo.ca emails.
+    if (!isAuthenticated) {
+      setIsSigningUp(true);
       try {
-        const { user: newUser, error } = await signUp(email, password, {
+        await signIn('password', {
+          flow: 'signUp',
+          email: email.trim().toLowerCase(),
+          password,
           firstName,
           lastName,
           program,
           yearOfStudy,
           bio: aboutYou,
-          phoneNumber: socials,
+          phone: socials,
         });
-
-        if (error) {
-          console.error('Signup error:', error);
-          
-          // Handle specific error cases
-          if (error.code === 'user_already_exists') {
-            alert('This email is already registered. Please sign in instead.');
-          } else if (error.message?.includes('already registered')) {
-            alert('This email is already registered. Please sign in instead.');
-          } else {
-            alert(error.message || 'Failed to create account. Please try again.');
-          }
-          
-          setIsLoading(false);
-          return;
-        }
-
-        if (!newUser) {
-          alert('Failed to create account. Please try again.');
-          setIsLoading(false);
-          return;
-        }
-
-        setUser(newUser);
-        // Profile is created/updated in signUp function
       } catch (error) {
         console.error('Signup error:', error);
-        alert('An error occurred during signup. Please try again.');
-        setIsLoading(false);
+        const detail = typeof error?.data === 'string' ? error.data : error?.message || '';
+        if (detail.includes('already exists')) {
+          alert('This email is already registered. Please sign in instead.');
+        } else if (detail.includes('@uwo.ca')) {
+          alert(detail);
+        } else {
+          alert('Failed to create account. Please try again.');
+        }
         return;
+      } finally {
+        setIsSigningUp(false);
       }
-      setIsLoading(false);
     }
-    
+
     // Navigate to main home screen after profile setup
     navigateToMainHome();
-  };
-
-  const handleAuthSuccess = (userData, profileData) => {
-    setUser(userData);
-    setUserProfile(profileData);
   };
 
   const handleLogout = async () => {
     try {
       await signOut();
-      setUser(null);
-      setUserProfile(null);
       setEmail('');
       setPassword('');
       setFirstName('');
@@ -238,7 +219,7 @@ export default function App() {
     }
   };
 
-  if (!fontsLoaded || isLoading) {
+  if (!fontsLoaded || authLoading || isSigningUp) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#4b307d" />
@@ -261,7 +242,7 @@ export default function App() {
 
   if (currentScreen === 'home') {
     return (
-      <HomeScreen 
+      <HomeScreen
         fadeAnim={fadeAnim}
         homeTranslateX={homeTranslateX}
         onSignIn={navigateToSignIn}
@@ -270,7 +251,7 @@ export default function App() {
     );
   } else if (currentScreen === 'signin') {
     return (
-      <SignInScreen 
+      <SignInScreen
         fadeAnim={fadeAnim}
         signInTranslateX={signInTranslateX}
         email={email}
@@ -279,12 +260,11 @@ export default function App() {
         setPassword={setPassword}
         onBack={navigateToHome}
         onSignIn={navigateToMainHome}
-        onAuthSuccess={handleAuthSuccess}
       />
     );
   } else if (currentScreen === 'signup') {
     return (
-      <SignUpScreen 
+      <SignUpScreen
         fadeAnim={fadeAnim}
         signInTranslateX={signInTranslateX}
         firstName={firstName}
@@ -299,12 +279,11 @@ export default function App() {
         setConfirmPassword={setConfirmPassword}
         onBack={navigateToHome}
         onContinue={navigateToProfileSetup}
-        onAuthSuccess={handleAuthSuccess}
       />
     );
   } else if (currentScreen === 'profileSetup') {
     return (
-      <ProfileSetupScreen 
+      <ProfileSetupScreen
         fadeAnim={fadeAnim}
         signInTranslateX={signInTranslateX}
         firstName={firstName}
@@ -316,18 +295,18 @@ export default function App() {
         setSocials={setSocials}
         aboutYou={aboutYou}
         setAboutYou={setAboutYou}
-        user={user}
+        user={profile}
         onBack={navigateBackToSignUp}
         onContinue={handleProfileComplete}
       />
     );
   } else if (currentScreen === 'mainhome') {
     // Only render MainHomeScreen if user is authenticated
-    if (!user) {
+    if (!isAuthenticated) {
       // User is not authenticated, redirect to home
       setCurrentScreen('home');
       return (
-        <HomeScreen 
+        <HomeScreen
           fadeAnim={fadeAnim}
           homeTranslateX={homeTranslateX}
           onSignIn={navigateToSignIn}
@@ -335,6 +314,12 @@ export default function App() {
         />
       );
     }
-    return <MainHomeScreen firstName={firstName} onLogout={handleLogout} userId={user?.id} />;
+    return (
+      <MainHomeScreen
+        firstName={profile?.firstName ?? firstName}
+        onLogout={handleLogout}
+        userId={profile?._id}
+      />
+    );
   }
 }

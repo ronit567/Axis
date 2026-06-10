@@ -12,6 +12,21 @@ export const current = query({
   },
 });
 
+/**
+ * Pre-signup duplicate check so the SignUp screen can warn before the user
+ * fills out the whole profile (same UX as the old checkEmailExists).
+ */
+export const emailExists = query({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
+      .first();
+    return existing !== null;
+  },
+});
+
 /** Public-facing profile for a seller (no contact fields). */
 export const publicProfile = query({
   args: { userId: v.id("users") },

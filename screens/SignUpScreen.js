@@ -1,25 +1,28 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated, ActivityIndicator } from 'react-native';
-import { isValidSchoolEmail, checkEmailExists } from '../services/authService';
+import { convex } from '../config/convex';
+import { api } from '../convex/_generated/api';
 import EmailValidationModal from '../components/EmailValidationModal';
 import ErrorModal from '../components/ErrorModal';
 
-export default function SignUpScreen({ 
-  fadeAnim, 
-  signInTranslateX, 
+// UX-only pre-check; the real gate is server-side in convex/auth.ts.
+const isValidSchoolEmail = (email) => /^[A-Za-z0-9._%+-]+@uwo\.ca$/i.test(email.trim());
+
+export default function SignUpScreen({
+  fadeAnim,
+  signInTranslateX,
   firstName,
   setFirstName,
   lastName,
   setLastName,
-  email, 
-  setEmail, 
-  password, 
+  email,
+  setEmail,
+  password,
   setPassword,
   confirmPassword,
   setConfirmPassword,
   onBack,
-  onContinue,
-  onAuthSuccess
+  onContinue
 }) {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
@@ -72,13 +75,16 @@ export default function SignUpScreen({
 
     // Check if email already exists
     setIsLoading(true);
-    const { exists, error: checkError } = await checkEmailExists(email);
-    setIsLoading(false);
-
-    if (checkError) {
+    let exists;
+    try {
+      exists = await convex.query(api.users.emailExists, { email });
+    } catch (checkError) {
+      console.error('Email check error:', checkError);
       setErrorMessage('Unable to verify email. Please try again.');
       setShowErrorModal(true);
       return;
+    } finally {
+      setIsLoading(false);
     }
 
     if (exists) {

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated, ActivityIndicator, Alert } from 'react-native';
-import { signUp } from '../services/authService';
 import ErrorModal from '../components/ErrorModal';
 
 export default function ProfileSetupScreen({ 
