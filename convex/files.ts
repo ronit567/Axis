@@ -3,8 +3,7 @@ import { v } from "convex/values";
 import { requireUserId } from "./lib/auth";
 
 /**
- * Image upload flow (replaces the manual fetch→blob→arrayBuffer dance in the
- * old Supabase listingService):
+ * Image upload flow:
  *   1. client calls generateUploadUrl()
  *   2. client POSTs the file bytes to the returned URL → gets back a storageId
  *   3. client passes that storageId into listings.create({ images: [storageId] })
