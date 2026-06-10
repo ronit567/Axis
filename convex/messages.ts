@@ -38,7 +38,14 @@ export const listConversations = query({
               }
             : null,
           listing: listing
-            ? { _id: listing._id, title: listing.title, price: listing.price }
+            ? {
+                _id: listing._id,
+                title: listing.title,
+                price: listing.price,
+                imageUrl: listing.images[0]
+                  ? await ctx.storage.getUrl(listing.images[0])
+                  : null,
+              }
             : null,
         };
       }),
@@ -47,8 +54,8 @@ export const listConversations = query({
 });
 
 /**
- * Idempotent: keyed on (listing, buyer, seller) so two rapid taps can't create
- * duplicate threads. Fixes the find-then-insert race in the old Supabase code.
+ * Idempotent: keyed on (listing, buyer, seller) so two rapid taps can't
+ * create duplicate threads (no find-then-insert race).
  */
 export const getOrCreateConversation = mutation({
   args: { listingId: v.id("listings"), sellerId: v.id("users") },
@@ -118,8 +125,7 @@ export const send = mutation({
       offerAmount,
     });
 
-    // CORRECT unread logic: the RECIPIENT's count increments. (The original
-    // Supabase trigger had this inverted — it bumped the sender's own count.)
+    // The RECIPIENT's unread count increments, never the sender's.
     const senderIsBuyer = senderId === convo.buyerId;
     await ctx.db.patch(conversationId, {
       lastMessageText: body.slice(0, 100),

@@ -14,16 +14,8 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import {
-  getOrCreateConversation,
-  getMessages,
-  sendMessage,
-  markMessagesAsRead,
-  subscribeToMessages,
-  unsubscribe
-} from '../services/messagingService';
-import { markListingAsSold } from '../services/listingService';
-import { supabase } from '../config/supabase';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../convex/_generated/api';
 
 const BUYER_QUICK_REPLIES = [
   "Is this still available?",
@@ -38,107 +30,55 @@ const SELLER_QUICK_REPLIES = [
 ];
 
 export default function ChatScreen({ chat, item, onBack }) {
-  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
   const [conversationId, setConversationId] = useState(chat?.conversationId || null);
-  const [currentUserId, setCurrentUserId] = useState(null);
-  const [isBuyer, setIsBuyer] = useState(chat?.isBuyer ?? true);
+  const isBuyer = chat?.isBuyer ?? true;
   const flatListRef = useRef(null);
 
-  // Determine role based on chat data
+  const me = useQuery(api.users.current);
+  const currentUserId = me?._id;
+
+  const getOrCreateConversation = useMutation(api.messages.getOrCreateConversation);
+  const sendMessage = useMutation(api.messages.send);
+  const markRead = useMutation(api.messages.markRead);
+  const markListingAsSold = useMutation(api.listings.markSold);
+
+  // Opened from a listing (no conversation yet): create/find the thread.
+  // The mutation is idempotent, keyed on (listing, buyer, seller).
   useEffect(() => {
-    if (chat?.isBuyer !== undefined) {
-      setIsBuyer(chat.isBuyer);
+    if (conversationId || !chat?.sellerId) return;
+    const listingId = item?._id || chat?.listingId;
+    if (!listingId) return;
+    getOrCreateConversation({ listingId, sellerId: chat.sellerId })
+      .then(setConversationId)
+      .catch((error) => console.error('Error creating conversation:', error));
+  }, [conversationId, chat?.sellerId, item?._id, chat?.listingId]);
+
+  // Live message stream — new messages from either side just appear.
+  const messagesData = useQuery(
+    api.messages.listMessages,
+    conversationId ? { conversationId } : 'skip',
+  );
+  const messages = messagesData ?? [];
+  // Loading while the thread is being created or its history is in flight
+  const isLoading = conversationId === null || messagesData === undefined;
+
+  // Anything unread in this thread is read now (covers messages that arrive
+  // while the screen is open, since this re-runs as the list grows).
+  useEffect(() => {
+    if (conversationId && messages.length > 0) {
+      markRead({ conversationId });
     }
-  }, [chat]);
+  }, [conversationId, messages.length]);
 
-  // Get current user
+  // Hide quick replies once the thread has history
   useEffect(() => {
-    const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setCurrentUserId(user.id);
-      }
-    };
-    getCurrentUser();
-  }, []);
-
-  // Initialize conversation and fetch messages
-  useEffect(() => {
-    const initializeChat = async () => {
-      try {
-        setIsLoading(true);
-
-        let convId = conversationId;
-
-        // If no conversation ID, create/get one
-        if (!convId && item && chat?.sellerId) {
-          const { conversation, error } = await getOrCreateConversation(
-            item.id,
-            chat.sellerId
-          );
-
-          if (error) {
-            console.error('Error creating conversation:', error);
-            setIsLoading(false);
-            return;
-          }
-
-          if (conversation) {
-            convId = conversation.id;
-            setConversationId(convId);
-          }
-        }
-
-        // Fetch existing messages
-        if (convId) {
-          const { messages: data, error } = await getMessages(convId);
-          if (!error && data) {
-            setMessages(data);
-            // Hide quick replies if there are messages
-            if (data.length > 0) {
-              setShowQuickReplies(false);
-            }
-          }
-
-          // Mark messages as read
-          await markMessagesAsRead(convId);
-        }
-      } catch (error) {
-        console.error('Error initializing chat:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeChat();
-  }, [item, chat?.sellerId]);
-
-  // Subscribe to new messages
-  useEffect(() => {
-    if (!conversationId) return;
-
-    const subscription = subscribeToMessages(conversationId, (newMessage) => {
-      setMessages(prev => {
-        // Check if message already exists
-        const exists = prev.some(msg => msg.id === newMessage.id);
-        if (exists) return prev;
-        return [...prev, newMessage];
-      });
-
-      // Mark as read if from other user
-      if (newMessage.sender_id !== currentUserId) {
-        markMessagesAsRead(conversationId);
-      }
-    });
-
-    return () => {
-      unsubscribe(subscription);
-    };
-  }, [conversationId, currentUserId]);
+    if (messages.length > 0) {
+      setShowQuickReplies(false);
+    }
+  }, [messages.length]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -147,12 +87,12 @@ export default function ChatScreen({ chat, item, onBack }) {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
-  }, [messages]);
+  }, [messages.length]);
 
   // Format timestamp
-  const formatTimestamp = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit'
@@ -173,19 +113,14 @@ export default function ChatScreen({ chat, item, onBack }) {
       let convId = conversationId;
 
       // Create conversation if needed
-      if (!convId && item && chat?.sellerId) {
-        const { conversation, error } = await getOrCreateConversation(
-          item.id,
-          chat.sellerId
-        );
-
-        if (error) {
-          Alert.alert('Error', 'Failed to start conversation. Please try again.');
+      if (!convId && chat?.sellerId) {
+        const listingId = item?._id || chat?.listingId;
+        if (!listingId) {
+          Alert.alert('Error', 'Unable to create conversation.');
           setInputText(messageText);
           return;
         }
-
-        convId = conversation.id;
+        convId = await getOrCreateConversation({ listingId, sellerId: chat.sellerId });
         setConversationId(convId);
       }
 
@@ -195,31 +130,17 @@ export default function ChatScreen({ chat, item, onBack }) {
         return;
       }
 
-      // Send message
-      const { message, error } = await sendMessage(convId, messageText);
-
-      if (error) {
-        Alert.alert('Error', 'Failed to send message. Please try again.');
-        setInputText(messageText);
-        return;
-      }
-
-      // Add message to local state immediately if not already added by subscription
-      if (message) {
-        setMessages(prev => {
-          const exists = prev.some(msg => msg.id === message.id);
-          if (exists) return prev;
-          return [...prev, message];
-        });
-      }
+      await sendMessage({ conversationId: convId, body: messageText });
+      // The reactive listMessages query delivers the new message — no manual
+      // state patching needed.
     } catch (error) {
       console.error('Error sending message:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert('Error', 'Failed to send message. Please try again.');
       setInputText(messageText);
     } finally {
       setIsSending(false);
     }
-  }, [inputText, isSending, conversationId, item, chat?.sellerId]);
+  }, [inputText, isSending, conversationId, item, chat?.sellerId, chat?.listingId]);
 
   const handleQuickReply = (reply) => {
     handleSend(reply);
@@ -280,14 +201,14 @@ export default function ChatScreen({ chat, item, onBack }) {
         {
           text: 'Mark as Sold',
           onPress: async () => {
-            const listingId = item?.id || chat?.listing?.id;
+            const listingId = item?._id || chat?.listing?._id || chat?.listingId;
             if (listingId) {
-              const { error } = await markListingAsSold(listingId);
-              if (error) {
-                Alert.alert('Error', 'Failed to mark as sold.');
-              } else {
+              try {
+                await markListingAsSold({ id: listingId });
                 handleSend("✅ Great doing business with you! I've marked this item as sold.");
                 Alert.alert('Success', 'Item marked as sold!');
+              } catch (error) {
+                Alert.alert('Error', 'Failed to mark as sold.');
               }
             }
           }
@@ -349,7 +270,7 @@ export default function ChatScreen({ chat, item, onBack }) {
   };
 
   const handleSuggestMeetup = () => {
-    const meetupLocation = item?.meetup_location || item?.location || chat?.listing?.meetup_location;
+    const meetupLocation = item?.meetupLocation;
     if (meetupLocation) {
       handleSend(`📍 I usually meet at ${meetupLocation}. Does that work for you?`);
     } else {
@@ -374,7 +295,7 @@ export default function ChatScreen({ chat, item, onBack }) {
   };
 
   const renderMessage = ({ item: msg, index }) => {
-    const isUser = msg.sender_id === currentUserId;
+    const isUser = msg.senderId === currentUserId;
     const isLastMessage = index === messages.length - 1;
 
     return (
@@ -402,21 +323,21 @@ export default function ChatScreen({ chat, item, onBack }) {
             styles.messageText,
             isUser ? styles.userMessageText : styles.otherMessageText
           ]}>
-            {msg.content}
+            {msg.body}
           </Text>
           <View style={styles.messageFooter}>
             <Text style={[
               styles.timestamp,
               isUser ? styles.userTimestamp : styles.otherTimestamp
             ]}>
-              {formatTimestamp(msg.created_at)}
+              {formatTimestamp(msg._creationTime)}
             </Text>
             {isUser && isLastMessage && (
               <View style={styles.readReceipt}>
                 <Ionicons
-                  name={msg.is_read ? "checkmark-done" : "checkmark"}
+                  name={msg.readAt ? "checkmark-done" : "checkmark"}
                   size={14}
-                  color={msg.is_read ? "#4FC3F7" : "#F0E6FF"}
+                  color={msg.readAt ? "#4FC3F7" : "#F0E6FF"}
                 />
               </View>
             )}
@@ -429,7 +350,7 @@ export default function ChatScreen({ chat, item, onBack }) {
   const otherUserName = chat?.sellerName || 'User';
   const itemTitle = item?.title || chat?.itemTitle || 'Item';
   const itemPrice = item?.price || chat?.itemPrice || chat?.listing?.price || 0;
-  const itemImage = item?.images?.[0] || chat?.listing?.images?.[0];
+  const itemImage = item?.imageUrls?.[0] || chat?.listing?.imageUrl;
   const quickReplies = isBuyer ? BUYER_QUICK_REPLIES : SELLER_QUICK_REPLIES;
 
   if (isLoading) {
@@ -572,7 +493,7 @@ export default function ChatScreen({ chat, item, onBack }) {
         ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
-        keyExtractor={(msg) => msg.id}
+        keyExtractor={(msg) => msg._id}
         contentContainerStyle={styles.messagesList}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         ListEmptyComponent={

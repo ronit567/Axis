@@ -1,64 +1,25 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, Image, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, Image, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getConversations, subscribeToConversations, unsubscribe } from '../services/messagingService';
+import { useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
 
 const TABS = ['All', 'Buying', 'Selling'];
 
-export default function MessagesListScreen({ onBack, onChatPress, userId }) {
+export default function MessagesListScreen({ onBack, onChatPress }) {
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState('All');
-  const [conversations, setConversations] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch conversations
-  const fetchConversations = useCallback(async () => {
-    try {
-      const { conversations: data } = await getConversations();
-      setConversations(data || []);
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  // Initial fetch and real-time subscription
-  useEffect(() => {
-    fetchConversations();
-
-    // Subscribe to conversation updates
-    const subscription = subscribeToConversations((eventType, newData, oldData) => {
-      if (eventType === 'INSERT') {
-        // New conversation - refetch to get full data with profiles
-        fetchConversations();
-      } else if (eventType === 'UPDATE') {
-        // Update existing conversation
-        setConversations(prev =>
-          prev.map(conv => conv.id === newData.id ? { ...conv, ...newData } : conv)
-        );
-      } else if (eventType === 'DELETE') {
-        setConversations(prev => prev.filter(conv => conv.id !== oldData.id));
-      }
-    });
-
-    return () => {
-      unsubscribe(subscription);
-    };
-  }, [fetchConversations]);
-
-  // Pull to refresh
-  const onRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    fetchConversations();
-  }, [fetchConversations]);
+  // Reactive: new conversations, last-message previews and unread counts all
+  // update live — no fetch, no subscription, no pull-to-refresh.
+  const conversationsData = useQuery(api.messages.listConversations);
+  const isLoading = conversationsData === undefined;
+  const conversations = conversationsData ?? [];
 
   // Format timestamp
-  const formatTimestamp = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
     const now = new Date();
     const diffMs = now - date;
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
@@ -85,10 +46,10 @@ export default function MessagesListScreen({ onBack, onChatPress, userId }) {
       // Search filter
       if (searchText.trim() !== '') {
         const searchLower = searchText.toLowerCase();
-        const nameMatch = conv.otherUser?.first_name?.toLowerCase().includes(searchLower) ||
-                          conv.otherUser?.last_name?.toLowerCase().includes(searchLower);
+        const nameMatch = conv.otherUser?.firstName?.toLowerCase().includes(searchLower) ||
+                          conv.otherUser?.lastName?.toLowerCase().includes(searchLower);
         const itemMatch = conv.listing?.title?.toLowerCase().includes(searchLower);
-        const messageMatch = conv.last_message_text?.toLowerCase().includes(searchLower);
+        const messageMatch = conv.lastMessageText?.toLowerCase().includes(searchLower);
         if (!nameMatch && !itemMatch && !messageMatch) {
           return false;
         }
@@ -103,9 +64,9 @@ export default function MessagesListScreen({ onBack, onChatPress, userId }) {
   const sellingCount = conversations.filter(c => !c.isBuyer).length;
 
   // Count unread messages by type
-  const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
-  const buyingUnread = conversations.filter(c => c.isBuyer).reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
-  const sellingUnread = conversations.filter(c => !c.isBuyer).reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
+  const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unread || 0), 0);
+  const buyingUnread = conversations.filter(c => c.isBuyer).reduce((sum, conv) => sum + (conv.unread || 0), 0);
+  const sellingUnread = conversations.filter(c => !c.isBuyer).reduce((sum, conv) => sum + (conv.unread || 0), 0);
 
   const getTabBadgeCount = (tab) => {
     if (tab === 'All') return totalUnread;
@@ -116,11 +77,11 @@ export default function MessagesListScreen({ onBack, onChatPress, userId }) {
 
   const renderChatItem = ({ item }) => {
     const otherUserName = item.otherUser
-      ? `${item.otherUser.first_name || ''} ${item.otherUser.last_name || ''}`.trim() || 'User'
+      ? `${item.otherUser.firstName || ''} ${item.otherUser.lastName || ''}`.trim() || 'User'
       : 'User';
     const itemTitle = item.listing?.title || 'Item';
     const itemPrice = item.listing?.price || 0;
-    const itemImage = item.listing?.images?.[0];
+    const itemImage = item.listing?.imageUrl;
     const isBuying = item.isBuyer;
 
     return (
@@ -133,7 +94,7 @@ export default function MessagesListScreen({ onBack, onChatPress, userId }) {
           ...item,
           sellerName: otherUserName,
           itemTitle,
-          conversationId: item.id,
+          conversationId: item._id,
           isBuyer: isBuying,
         })}
         activeOpacity={0.7}
@@ -190,22 +151,22 @@ export default function MessagesListScreen({ onBack, onChatPress, userId }) {
                 </Text>
               </View>
             </View>
-            <Text style={styles.timestamp}>{formatTimestamp(item.last_message_at)}</Text>
+            <Text style={styles.timestamp}>{formatTimestamp(item.lastMessageAt)}</Text>
           </View>
           <Text style={styles.itemTitle} numberOfLines={1}>{itemTitle}</Text>
           <View style={styles.messageRow}>
             <Text
-              style={[styles.lastMessage, item.unreadCount > 0 && styles.unreadMessage]}
+              style={[styles.lastMessage, item.unread > 0 && styles.unreadMessage]}
               numberOfLines={1}
             >
-              {item.last_message_text || 'No messages yet'}
+              {item.lastMessageText || 'No messages yet'}
             </Text>
-            {item.unreadCount > 0 && (
+            {item.unread > 0 && (
               <View style={[
                 styles.unreadBadge,
                 isBuying ? styles.unreadBadgeBuying : styles.unreadBadgeSelling
               ]}>
-                <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
+                <Text style={styles.unreadBadgeText}>{item.unread}</Text>
               </View>
             )}
           </View>
@@ -394,18 +355,10 @@ export default function MessagesListScreen({ onBack, onChatPress, userId }) {
       <FlatList
         data={filteredChats}
         renderItem={renderChatItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         contentContainerStyle={filteredChats.length === 0 ? styles.emptyList : styles.chatList}
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={onRefresh}
-            tintColor="#B39BD5"
-            colors={['#B39BD5']}
-          />
-        }
       />
     </View>
   );
