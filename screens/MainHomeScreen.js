@@ -150,6 +150,16 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     setCurrentScreen('profile');
   };
 
+  const handleEditListing = (listing) => {
+    setSelectedItem(listing);
+    setCurrentScreen('editListing');
+  };
+
+  const handleBackToProfile = () => {
+    setCurrentScreen('profile');
+    setSelectedItem(null);
+  };
+
   const handleListingCreated = () => {
     // Go back to home — the reactive feed query picks up the new listing
     setCurrentScreen('home');
@@ -167,10 +177,12 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   
   if (currentScreen === 'itemDetails' && selectedItem) {
     return (
-      <ItemDetailsScreen 
+      <ItemDetailsScreen
         item={selectedItem}
         onBack={handleBackToHome}
         onChatWithSeller={handleChatWithSeller}
+        onItemPress={handleItemPress}
+        onEditListing={handleEditListing}
       />
     );
   }
@@ -200,6 +212,17 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         onBack={handleBackToHome}
         onLogout={onLogout}
         onItemPress={handleItemPress}
+        onEditListing={handleEditListing}
+      />
+    );
+  }
+
+  if (currentScreen === 'editListing' && selectedItem) {
+    return (
+      <CreateListingScreen
+        listing={selectedItem}
+        onBack={handleBackToProfile}
+        onSuccess={handleBackToProfile}
       />
     );
   }

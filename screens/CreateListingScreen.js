@@ -21,17 +21,28 @@ import { api } from '../convex/_generated/api';
 const CATEGORIES = ['Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'];
 const CONDITIONS = ['Like New', 'Good', 'Fair'];
 
-export default function CreateListingScreen({ onBack, onSuccess }) {
+// Pass a `listing` (hydrated, with imageUrls) to edit it instead of creating.
+export default function CreateListingScreen({ onBack, onSuccess, listing }) {
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const createListing = useMutation(api.listings.create);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('');
-  const [category, setCategory] = useState('');
-  const [condition, setCondition] = useState('');
-  const [meetupLocation, setMeetupLocation] = useState('');
-  const [meetupAvailability, setMeetupAvailability] = useState('');
-  const [images, setImages] = useState([]);
+  const updateListing = useMutation(api.listings.update);
+  const isEditing = !!listing;
+  const [title, setTitle] = useState(listing?.title ?? '');
+  const [description, setDescription] = useState(listing?.description ?? '');
+  const [price, setPrice] = useState(listing ? String(listing.price) : '');
+  const [category, setCategory] = useState(listing?.category ?? '');
+  const [condition, setCondition] = useState(listing?.condition ?? '');
+  const [meetupLocation, setMeetupLocation] = useState(listing?.meetupLocation ?? '');
+  const [meetupAvailability, setMeetupAvailability] = useState(listing?.meetupAvailability ?? '');
+  // Each image: { uri, storageId? } — existing images keep their storage ID
+  // and are never re-uploaded; new picks upload on submit.
+  const [images, setImages] = useState(() =>
+    listing
+      ? listing.images
+          .map((storageId, i) => ({ storageId, uri: listing.imageUrls?.[i] }))
+          .filter((img) => img.uri)
+      : [],
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   const pickImage = async () => {
@@ -54,7 +65,7 @@ export default function CreateListingScreen({ onBack, onSuccess }) {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setImages([...images, result.assets[0].uri]);
+      setImages([...images, { uri: result.assets[0].uri }]);
     }
   };
 
@@ -77,7 +88,7 @@ export default function CreateListingScreen({ onBack, onSuccess }) {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setImages([...images, result.assets[0].uri]);
+      setImages([...images, { uri: result.assets[0].uri }]);
     }
   };
 
@@ -125,10 +136,15 @@ export default function CreateListingScreen({ onBack, onSuccess }) {
     try {
       // Upload each image to Convex storage: get a one-time upload URL, POST
       // the file bytes, keep the returned storage ID for the listing.
+      // Existing images (edit mode) already have a storage ID and are skipped.
       const storageIds = [];
-      for (const uri of images) {
+      for (const img of images) {
+        if (img.storageId) {
+          storageIds.push(img.storageId);
+          continue;
+        }
         const uploadUrl = await generateUploadUrl();
-        const file = await fetch(uri);
+        const file = await fetch(img.uri);
         const blob = await file.blob();
         const result = await fetch(uploadUrl, {
           method: 'POST',
@@ -142,8 +158,7 @@ export default function CreateListingScreen({ onBack, onSuccess }) {
         storageIds.push(storageId);
       }
 
-      // Create the listing (seller is derived from the session server-side)
-      const listingId = await createListing({
+      const fields = {
         title: title.trim(),
         description: description.trim() || undefined,
         price: parseFloat(price),
@@ -152,14 +167,23 @@ export default function CreateListingScreen({ onBack, onSuccess }) {
         images: storageIds,
         meetupLocation: meetupLocation.trim() || undefined,
         meetupAvailability: meetupAvailability.trim() || undefined,
-      });
+      };
 
-      Alert.alert('Success', 'Your listing has been posted!', [
+      let listingId;
+      if (isEditing) {
+        await updateListing({ id: listing._id, ...fields });
+        listingId = listing._id;
+      } else {
+        // Create the listing (seller is derived from the session server-side)
+        listingId = await createListing(fields);
+      }
+
+      Alert.alert('Success', isEditing ? 'Your listing has been updated!' : 'Your listing has been posted!', [
         { text: 'OK', onPress: () => onSuccess && onSuccess(listingId) },
       ]);
     } catch (error) {
       console.error('Submit error:', error);
-      Alert.alert('Error', 'Failed to create listing. Please try again.');
+      Alert.alert('Error', `Failed to ${isEditing ? 'update' : 'create'} listing. Please try again.`);
     }
 
     setIsLoading(false);
@@ -174,7 +198,7 @@ export default function CreateListingScreen({ onBack, onSuccess }) {
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Listing</Text>
+        <Text style={styles.headerTitle}>{isEditing ? 'Edit Listing' : 'Create Listing'}</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -197,9 +221,9 @@ export default function CreateListingScreen({ onBack, onSuccess }) {
               showsHorizontalScrollIndicator={false}
               style={styles.imageScroll}
             >
-              {images.map((uri, index) => (
+              {images.map((img, index) => (
                 <View key={index} style={styles.imageContainer}>
-                  <Image source={{ uri }} style={styles.previewImage} />
+                  <Image source={{ uri: img.uri }} style={styles.previewImage} />
                   <TouchableOpacity
                     style={styles.removeImageButton}
                     onPress={() => removeImage(index)}
@@ -362,7 +386,7 @@ export default function CreateListingScreen({ onBack, onSuccess }) {
           {isLoading ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.submitButtonText}>Post Listing</Text>
+            <Text style={styles.submitButtonText}>{isEditing ? 'Save Changes' : 'Post Listing'}</Text>
           )}
         </TouchableOpacity>
       </View>
