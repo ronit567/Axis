@@ -8,7 +8,12 @@ export const current = query({
   handler: async (ctx) => {
     const userId = await getUserId(ctx);
     if (!userId) return null;
-    return ctx.db.get(userId);
+    const user = await ctx.db.get(userId);
+    if (!user) return null;
+    return {
+      ...user,
+      avatarUrl: user.avatarId ? await ctx.storage.getUrl(user.avatarId) : null,
+    };
   },
 });
 

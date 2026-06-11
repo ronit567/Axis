@@ -11,6 +11,7 @@ import MessagesListScreen from './MessagesListScreen';
 import ItemDetailsScreen from './ItemDetailsScreen';
 import ChatScreen from './ChatScreen';
 import CreateListingScreen from './CreateListingScreen';
+import ProfileScreen from './ProfileScreen';
 
 export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const [searchText, setSearchText] = useState('');
@@ -145,6 +146,10 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     setCurrentScreen('createListing');
   };
 
+  const handleProfilePress = () => {
+    setCurrentScreen('profile');
+  };
+
   const handleListingCreated = () => {
     // Go back to home — the reactive feed query picks up the new listing
     setCurrentScreen('home');
@@ -188,6 +193,16 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
       />
     );
   }
+
+  if (currentScreen === 'profile') {
+    return (
+      <ProfileScreen
+        onBack={handleBackToHome}
+        onLogout={onLogout}
+        onItemPress={handleItemPress}
+      />
+    );
+  }
   
   return (
     <View style={styles.container}>
@@ -206,10 +221,10 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         
         {/* Placing header in overlay section */}
         <View style={styles.headerOverlay}>
-          {/* Icon for Profile - Tap to logout */}
-          <TouchableOpacity 
+          {/* Icon for Profile */}
+          <TouchableOpacity
             style={styles.iconContainer}
-            onPress={onLogout}
+            onPress={handleProfilePress}
           >
             <Image 
               source={require('../images/profile_icon.png')}
@@ -504,7 +519,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
           <Text style={styles.navLabel}>Messages</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem} onPress={handleProfilePress}>
           <Ionicons name="person-outline" size={28} color="#999999" />
           <Text style={styles.navLabel}>Profile</Text>
         </TouchableOpacity>

@@ -110,7 +110,9 @@ export const myListings = query({
       .withIndex("by_seller", (q) => q.eq("sellerId", userId))
       .order("desc")
       .collect();
-    return rows.filter((l) => l.status !== "removed");
+    return Promise.all(
+      rows.filter((l) => l.status !== "removed").map((l) => hydrate(ctx, l)),
+    );
   },
 });
 
