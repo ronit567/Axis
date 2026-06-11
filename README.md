@@ -1,107 +1,82 @@
-# Axis Mobile App 🛒
+# Axis 🛒
 
-A React Native mobile marketplace app built with Expo, designed for school communities to buy and sell items easily.
+A student marketplace app for Western University, built with React Native
+(Expo) and [Convex](https://convex.dev). Students sign up with their `@uwo.ca`
+email, list items for sale, browse the campus feed, and message sellers in
+realtime.
 
-![Expo](https://img.shields.io/badge/Expo-54.0.0-blue)
-![React Native](https://img.shields.io/badge/React%20Native-0.81.5-61DAFB)
-![License](https://img.shields.io/badge/license-MIT-green)
+![Expo](https://img.shields.io/badge/Expo-54-blue)
+![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB)
+![Convex](https://img.shields.io/badge/Backend-Convex-EE342F)
 
 ## 📱 Features
 
-- **Beautiful Landing Page** - Modern purple-themed UI with custom header image and logo
-- **User Authentication Flow** - Sign in screen with email and password inputs
-- **Custom Typography** - Hammersmith One Google Font for consistent branding
-- **Responsive Design** - Optimized for both iOS and Android devices
-- **Smooth Navigation** - Seamless transitions between screens
-- **Interactive Elements** - Touch-responsive buttons with visual feedback
+- **School-gated accounts** — email/password auth via Convex Auth; the
+  `@uwo.ca` domain check is enforced server-side, and sessions persist
+  securely on-device (expo-secure-store)
+- **Listings** — create listings with up to 5 photos (Convex file storage),
+  browse For You / Trending / Recently Listed, filter by category, condition,
+  and price
+- **Realtime everything** — feeds, chats, and unread badges update live via
+  Convex reactive queries; no refresh button anywhere
+- **Messaging** — per-listing buyer↔seller conversations with unread counts,
+  read receipts, quick replies, and offer/meetup actions
+- **Seller tools** — mark as sold, delete listing, view counts
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- **Node.js** (v20.19.4 or newer recommended)
-- **npm** or **yarn**
-- **Expo Go** app on your mobile device
-  - [iOS App Store](https://apps.apple.com/app/expo-go/id982107779)
-  - [Google Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent)
+- **Node.js** v20+
+- **Expo Go** on your phone ([iOS](https://apps.apple.com/app/expo-go/id982107779) / [Android](https://play.google.com/store/apps/details?id=host.exp.exponent))
 
-### Installation
+### Run it
 
-1. Clone the repository:
-```bash
-git clone https://github.com/ronit567/Axis.git
-cd Axis
-```
-
-2. Install dependencies:
 ```bash
 npm install
-```
 
-3. Start the development server:
-```bash
+# terminal 1 — backend (writes EXPO_PUBLIC_CONVEX_URL to .env.local)
+npx convex dev
+
+# terminal 2 — app
 npm start
 ```
 
-### Running on Your Device
+Scan the QR code with your phone, or use `npm run ios` / `npm run android`
+for simulators.
 
-#### Option 1: Using Expo Go (Recommended)
-1. Run `npm start`
-2. Scan the QR code with:
-   - **iOS**: Camera app (points to Expo Go automatically)
-   - **Android**: Expo Go app's built-in scanner
-3. The app will load on your device
+### Backend smoke tests
 
-#### Option 2: Using Simulators/Emulators
-- **iOS Simulator**: `npm run ios` (requires macOS with Xcode)
-- **Android Emulator**: `npm run android` (requires Android Studio)
-- **Web Browser**: `npm run web`
+With `npx convex dev` running:
 
-## 🎨 Design
-
-The app features a modern, clean design with:
-- **Primary Color**: Purple (#4b307d)
-- **Header**: Curved bottom edges for a modern look
-- **Logo**: Centered circular badge overlapping the header
-- **Typography**: Hammersmith One font for branding consistency
-- **Layout**: Clean white background with strategic purple accents
+```bash
+node scripts/smoke-auth.mjs $RANDOM
+node scripts/smoke-listings.mjs $RANDOM
+node scripts/smoke-messages.mjs $RANDOM
+```
 
 ## 📁 Project Structure
 
 ```
-axis-mobile-app/
-├── App.js              # Main app component with navigation logic
-├── images/             # Image assets
-│   ├── header.png      # Header background image
-│   ├── logo.png        # App logo
-│   └── grey_circle.png # Circle background for logo
-├── app.json            # Expo configuration
-├── package.json        # Dependencies and scripts
-├── babel.config.js     # Babel configuration
-├── .gitignore          # Git ignore rules
-└── README.md           # This file
+axis/
+├── App.js                 # Auth provider + screen switching
+├── convex/                # Backend: schema, auth, queries & mutations
+│   ├── schema.ts          # users, listings, conversations, messages
+│   ├── auth.ts            # Convex Auth password provider + @uwo.ca gate
+│   ├── listings.ts        # feed, trending, create, markSold, …
+│   ├── messages.ts        # conversations, send, markRead, …
+│   ├── users.ts           # profile queries/mutations
+│   └── files.ts           # image upload URLs
+├── screens/               # One file per screen
+├── components/            # Shared UI (listing cards, filters, modals)
+├── config/convex.js       # Shared Convex client
+└── scripts/               # Backend smoke tests
 ```
 
-## 🛠️ Technologies Used
+## 🛠️ Stack
 
-- **React Native** - Mobile app framework
-- **Expo** - Development platform and tooling
-- **Expo Font** - Custom font loading
-- **Expo Google Fonts** - Hammersmith One typography
-- **React Hooks** - State management (useState)
-
-## 📝 Available Scripts
-
-- `npm start` - Start the Expo development server
-- `npm run android` - Run on Android emulator
-- `npm run ios` - Run on iOS simulator
-- `npm run web` - Run in web browser
-
-## 🔧 Configuration
-
-The app is configured for:
-- **Expo SDK**: 54.0.0
-- **React**: 19.1.0
-- **React Native**: 0.81.5
-- **Bundle Identifier (iOS)**: com.axis.mobileapp
-- **Package Name (Android)**: com.axis.mobileapp
+- **React Native + Expo** — app framework and tooling
+- **Convex** — database, realtime queries, file storage, auth (schema and
+  authorization live in version-controlled TypeScript under `convex/`)
+- **Convex Auth** — email/password with secure session persistence
+- **Poppins & Hammersmith One** — typography
