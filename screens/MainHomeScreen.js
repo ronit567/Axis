@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
@@ -25,9 +25,21 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
 
+  // Debounced server-side search — the feed query uses the full-text index
+  // on listing titles, so results aren't limited to the first 50 rows.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchText.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchText]);
+  const isSearching = debouncedSearch.length > 0;
+
   // Reactive listings — Convex pushes updates, so there's no fetch, no
   // realtime subscription to manage, and no pull-to-refresh needed.
-  const feed = useQuery(api.listings.feed, { limit: 50 });
+  const feed = useQuery(api.listings.feed, {
+    limit: 50,
+    search: isSearching ? debouncedSearch : undefined,
+  });
   const trendingItems = useQuery(api.listings.trending, { limit: 10 });
 
   const isLoading = feed === undefined || trendingItems === undefined;
@@ -81,25 +93,16 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
       if (filters.maxPrice < PRICE_CAP && item.price > filters.maxPrice) {
         return false;
       }
-      
-      // Search text filter
-      if (searchText.trim() !== '') {
-        const searchLower = searchText.toLowerCase();
-        const titleMatch = item.title.toLowerCase().includes(searchLower);
-        const categoryMatch = item.category.toLowerCase().includes(searchLower);
-        if (!titleMatch && !categoryMatch) {
-          return false;
-        }
-      }
-      
+
       return true;
     });
   };
-  
+
   // Apply filters to each section using useMemo for performance
-  const filteredForYou = useMemo(() => filterItems(forYouItems), [filters, searchText, forYouItems]);
-  const filteredTrending = useMemo(() => filterItems(trendingItems ?? []), [filters, searchText, trendingItems]);
-  const filteredRecentlyListed = useMemo(() => filterItems(recentItems), [filters, searchText, recentItems]);
+  // (text search happens server-side in the feed query)
+  const filteredForYou = useMemo(() => filterItems(forYouItems), [filters, forYouItems]);
+  const filteredTrending = useMemo(() => filterItems(trendingItems ?? []), [filters, trendingItems]);
+  const filteredRecentlyListed = useMemo(() => filterItems(recentItems), [filters, recentItems]);
   
   // Navigation handlers
   const handleItemPress = (item) => {
@@ -417,11 +420,11 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
           </View>
         ) : (
           <>
-            {/* For You Section */}
+            {/* For You Section (doubles as search results) */}
         {filteredForYou.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>For You</Text>
+              <Text style={styles.sectionTitle}>{isSearching ? 'Results' : 'For You'}</Text>
             </View>
             <FlatList
               data={filteredForYou}
@@ -439,7 +442,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         )}
 
         {/* Trending Section */}
-        {filteredTrending.length > 0 && (
+        {!isSearching && filteredTrending.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Trending</Text>
@@ -460,7 +463,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         )}
 
         {/* Recently Listed Section */}
-        {filteredRecentlyListed.length > 0 && (
+        {!isSearching && filteredRecentlyListed.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recently Listed</Text>
@@ -481,16 +484,16 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         )}
         
         {/* No results message */}
-        {filteredForYou.length === 0 && filteredTrending.length === 0 && filteredRecentlyListed.length === 0 && (
+        {filteredForYou.length === 0 && (isSearching || (filteredTrending.length === 0 && filteredRecentlyListed.length === 0)) && (
           <View style={styles.noResultsContainer}>
             <Ionicons name="search-outline" size={64} color="#999999" />
             <Text style={styles.noResultsText}>No items found</Text>
             <Text style={styles.noResultsSubtext}>
-              {forYouItems.length === 0 && trendingItems.length === 0 && recentItems.length === 0
+              {!isSearching && forYouItems.length === 0 && trendingItems.length === 0 && recentItems.length === 0
                 ? 'Be the first to list an item!'
                 : 'Try adjusting your filters or search terms'}
             </Text>
-            {forYouItems.length === 0 && trendingItems.length === 0 && recentItems.length === 0 && (
+            {!isSearching && forYouItems.length === 0 && trendingItems.length === 0 && recentItems.length === 0 && (
               <TouchableOpacity style={styles.createFirstButton} onPress={handleSellPress}>
                 <Text style={styles.createFirstButtonText}>Create Listing</Text>
               </TouchableOpacity>
