@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,7 +9,6 @@ import {
   Dimensions,
   Share,
   Alert,
-  Animated,
   ActivityIndicator
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,9 +18,7 @@ import { api } from '../convex/_generated/api';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onItemPress, onEditListing }) {
-  const [isFavorited, setIsFavorited] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const heartScale = useRef(new Animated.Value(1)).current;
 
   // Get images from item or use placeholder
   const images = item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls : [null];
@@ -61,24 +58,6 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
 
   const timePosted = getTimePosted();
   const views = item.views || 0;
-
-  const handleFavorite = () => {
-    // Animate heart
-    Animated.sequence([
-      Animated.timing(heartScale, {
-        toValue: 1.3,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(heartScale, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    setIsFavorited(!isFavorited);
-  };
 
   const handleShare = async () => {
     try {
@@ -168,10 +147,6 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
     }
   };
 
-  const handleBoostListing = () => {
-    Alert.alert('Boost Listing', 'This feature will help your listing get more visibility. Coming soon!');
-  };
-
   const handleImageScroll = (event) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     setCurrentImageIndex(index);
@@ -197,17 +172,6 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           <TouchableOpacity onPress={handleShare} style={styles.headerButton}>
             <Ionicons name="share-outline" size={24} color="#333333" />
           </TouchableOpacity>
-          {!isOwner && (
-            <TouchableOpacity onPress={handleFavorite} style={styles.headerButton}>
-              <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-                <Ionicons
-                  name={isFavorited ? "heart" : "heart-outline"}
-                  size={24}
-                  color={isFavorited ? "#FF6B6B" : "#333333"}
-                />
-              </Animated.View>
-            </TouchableOpacity>
-          )}
           {isOwner && (
             <TouchableOpacity onPress={handleEditListing} style={styles.headerButton}>
               <Ionicons name="create-outline" size={24} color="#333333" />
@@ -315,18 +279,6 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
                   <Ionicons name="eye" size={24} color="#B39BD5" />
                   <Text style={styles.ownerStatValue}>{views}</Text>
                   <Text style={styles.ownerStatLabel}>Views</Text>
-                </View>
-                <View style={styles.ownerStatDivider} />
-                <View style={styles.ownerStatItem}>
-                  <Ionicons name="chatbubbles" size={24} color="#B39BD5" />
-                  <Text style={styles.ownerStatValue}>--</Text>
-                  <Text style={styles.ownerStatLabel}>Inquiries</Text>
-                </View>
-                <View style={styles.ownerStatDivider} />
-                <View style={styles.ownerStatItem}>
-                  <Ionicons name="heart" size={24} color="#B39BD5" />
-                  <Text style={styles.ownerStatValue}>--</Text>
-                  <Text style={styles.ownerStatLabel}>Saves</Text>
                 </View>
               </View>
             </View>
@@ -485,13 +437,6 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
       {/* Bottom Action Bar - Different for owner vs buyer */}
       {isOwner ? (
         <View style={styles.bottomBar}>
-          <TouchableOpacity
-            style={styles.ownerActionButton}
-            onPress={handleBoostListing}
-          >
-            <Ionicons name="rocket-outline" size={20} color="#B39BD5" />
-            <Text style={styles.ownerActionButtonText}>Boost</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.ownerActionButton}
             onPress={handleDeleteListing}
@@ -738,11 +683,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Poppins_400Regular',
     color: '#999999',
-  },
-  ownerStatDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#E5E5E5',
   },
   descriptionSection: {
     marginBottom: 24,

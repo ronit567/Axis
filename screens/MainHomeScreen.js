@@ -265,14 +265,6 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
             <Text style={styles.nameText}>{firstName || 'User'}</Text>
           </View>
           
-          {/* Notification Icon */}
-          <TouchableOpacity style={styles.iconContainer}>
-            <Image 
-              source={require('../images/notification_icon.png')}
-              style={styles.notificationIcon}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
         </View>
         
         {/* Search Bar with Filter Button */}
@@ -504,15 +496,6 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         )}
       </ScrollView>
       
-      {/* Cart Icon */}
-      <TouchableOpacity style={styles.cartButton}>
-        <Image 
-          source={require('../images/cart_icon.png')}
-          style={styles.cartIcon}
-          resizeMode="contain"
-        />
-      </TouchableOpacity>
-      
       {/* Filter Modal */}
       <FilterModal
         visible={showFilters}
@@ -527,11 +510,6 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         <TouchableOpacity style={styles.navItem}>
           <Ionicons name="home" size={28} color="#B39BD5" />
           <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="search-outline" size={28} color="#999999" />
-          <Text style={styles.navLabel}>Explore</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.sellButton} onPress={handleSellPress}>
@@ -622,10 +600,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-  },
-  notificationIcon: {
-    width: 28,
-    height: 28,
   },
   welcomeContainer: {
     flex: 1,
@@ -762,27 +736,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
-  },
-  cartButton: {
-    position: 'absolute',
-    bottom: 110,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 3,
-  },
-  cartIcon: {
-    width: 35,
-    height: 35,
   },
   bottomNav: {
     position: 'absolute',
