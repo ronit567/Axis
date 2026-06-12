@@ -13,7 +13,7 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -147,19 +147,19 @@ export default function ChatScreen({ chat, item, onBack }) {
     handleSend(reply);
   };
 
-  // Buyer actions
+  // Buyer: compose an offer message
   const handleMakeOffer = () => {
-    const itemPrice = item?.price || chat?.itemPrice || chat?.listing?.price || 50;
+    const itemPrice = item?.price || chat?.itemPrice || chat?.listing?.price || 0;
     Alert.prompt(
       'Make an Offer',
-      `Enter your offer (Listed at $${itemPrice})`,
+      `Enter your offer (listed at $${itemPrice})`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Send Offer',
           onPress: (value) => {
             if (value && !isNaN(value)) {
-              handleSend(`💰 I'd like to offer $${value} for this item. Let me know if that works!`);
+              handleSend(`I'd like to offer $${value} for this item. Let me know if that works!`);
             }
           }
         },
@@ -170,29 +170,7 @@ export default function ChatScreen({ chat, item, onBack }) {
     );
   };
 
-  const handleScheduleMeetup = () => {
-    Alert.alert(
-      'Schedule Meetup',
-      'Choose a suggested time:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Today',
-          onPress: () => handleSend("📅 Can we meet today? I'm flexible with the time.")
-        },
-        {
-          text: 'Tomorrow',
-          onPress: () => handleSend("📅 How about meeting tomorrow? What time works for you?")
-        },
-        {
-          text: 'This Week',
-          onPress: () => handleSend("📅 I'm free this week. When would be a good time to meet?")
-        },
-      ]
-    );
-  };
-
-  // Seller actions
+  // Seller: mark the listing sold and confirm in the thread
   const handleMarkAsSold = () => {
     Alert.alert(
       'Mark as Sold',
@@ -206,8 +184,7 @@ export default function ChatScreen({ chat, item, onBack }) {
             if (listingId) {
               try {
                 await markListingAsSold({ id: listingId });
-                handleSend("✅ Great doing business with you! I've marked this item as sold.");
-                Alert.alert('Success', 'Item marked as sold!');
+                handleSend("Great doing business with you! I've marked this item as sold.");
               } catch (error) {
                 Alert.alert('Error', 'Failed to mark as sold.');
               }
@@ -218,83 +195,6 @@ export default function ChatScreen({ chat, item, onBack }) {
     );
   };
 
-  const handleAcceptOffer = () => {
-    Alert.alert(
-      'Accept Offer',
-      'Accept the buyer\'s latest offer?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Accept',
-          onPress: () => handleSend("✅ I accept your offer! Let's arrange a meetup.")
-        },
-      ]
-    );
-  };
-
-  const handleDeclineOffer = () => {
-    const itemPrice = item?.price || chat?.itemPrice || chat?.listing?.price || 50;
-    Alert.alert(
-      'Decline Offer',
-      'How would you like to respond?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Decline',
-          onPress: () => handleSend("Sorry, I can't accept that offer. Are you able to come up a bit?")
-        },
-        {
-          text: 'Counter',
-          onPress: () => {
-            Alert.prompt(
-              'Counter Offer',
-              `Enter your counter offer (Listed at $${itemPrice})`,
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Send',
-                  onPress: (value) => {
-                    if (value && !isNaN(value)) {
-                      handleSend(`💰 I can do $${value}. Does that work for you?`);
-                    }
-                  }
-                },
-              ],
-              'plain-text',
-              '',
-              'numeric'
-            );
-          }
-        },
-      ]
-    );
-  };
-
-  const handleSuggestMeetup = () => {
-    const meetupLocation = item?.meetupLocation;
-    if (meetupLocation) {
-      handleSend(`📍 I usually meet at ${meetupLocation}. Does that work for you?`);
-    } else {
-      Alert.prompt(
-        'Suggest Meetup Location',
-        'Enter a meetup location',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Send',
-            onPress: (value) => {
-              if (value) {
-                handleSend(`📍 How about we meet at ${value}? Let me know if that works!`);
-              }
-            }
-          },
-        ],
-        'plain-text',
-        ''
-      );
-    }
-  };
-
   const renderMessage = ({ item: msg, index }) => {
     const isUser = msg.senderId === currentUserId;
     const isLastMessage = index === messages.length - 1;
@@ -302,20 +202,8 @@ export default function ChatScreen({ chat, item, onBack }) {
     return (
       <View style={[
         styles.messageContainer,
-        isUser ? styles.userMessageContainer : styles.sellerMessageContainer
+        isUser ? styles.userMessageContainer : styles.otherMessageContainer
       ]}>
-        {!isUser && (
-          <View style={[
-            styles.otherAvatarSmall,
-            isBuyer ? styles.avatarSeller : styles.avatarBuyer
-          ]}>
-            <Ionicons
-              name="person"
-              size={14}
-              color={isBuyer ? "#4CAF50" : "#2196F3"}
-            />
-          </View>
-        )}
         <View style={[
           styles.messageBubble,
           isUser ? styles.userBubble : styles.otherBubble
@@ -334,13 +222,11 @@ export default function ChatScreen({ chat, item, onBack }) {
               {formatTimestamp(msg._creationTime)}
             </Text>
             {isUser && isLastMessage && (
-              <View style={styles.readReceipt}>
-                <Ionicons
-                  name={msg.readAt ? "checkmark-done" : "checkmark"}
-                  size={14}
-                  color={msg.readAt ? "#4FC3F7" : "#F0E6FF"}
-                />
-              </View>
+              <Ionicons
+                name={msg.readAt ? 'checkmark-done' : 'checkmark'}
+                size={14}
+                color="#D8CCEC"
+              />
             )}
           </View>
         </View>
@@ -350,36 +236,34 @@ export default function ChatScreen({ chat, item, onBack }) {
 
   const otherUserName = chat?.sellerName || 'User';
   const itemTitle = item?.title || chat?.itemTitle || 'Item';
-  const itemPrice = item?.price || chat?.itemPrice || chat?.listing?.price || 0;
+  const itemPrice = item?.price ?? chat?.itemPrice ?? chat?.listing?.price ?? 0;
   const itemImage = item?.imageUrls?.[0] || chat?.listing?.imageUrl;
   const quickReplies = isBuyer ? BUYER_QUICK_REPLIES : SELLER_QUICK_REPLIES;
+
+  const header = (
+    <View style={styles.header}>
+      <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel="Back">
+        <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+      <View style={styles.headerInfo}>
+        <View style={styles.headerAvatar}>
+          <Ionicons name="person" size={18} color="#502E82" />
+        </View>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{otherUserName}</Text>
+          <Text style={styles.roleText}>
+            {isBuyer ? "You're buying" : "You're selling"}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.backButton} />
+    </View>
+  );
 
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <View style={[styles.header, isBuyer ? styles.headerBuyer : styles.headerSeller]}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <View style={styles.headerInfo}>
-            <View style={styles.headerAvatarContainer}>
-              <View style={[
-                styles.headerAvatar,
-                isBuyer ? styles.headerAvatarBuyer : styles.headerAvatarSeller
-              ]}>
-                <Ionicons
-                  name="person"
-                  size={18}
-                  color={isBuyer ? "#4CAF50" : "#2196F3"}
-                />
-              </View>
-            </View>
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.headerTitle}>{otherUserName}</Text>
-            </View>
-          </View>
-          <View style={styles.moreButton} />
-        </View>
+        {header}
         {/* Skeleton bubbles preview the conversation shape while loading */}
         <View style={styles.loadingContainer}>
           <Skeleton width="55%" height={42} borderRadius={18} style={styles.skeletonBubbleLeft} />
@@ -397,100 +281,33 @@ export default function ChatScreen({ chat, item, onBack }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
-      {/* Header with role indicator */}
-      <View style={[styles.header, isBuyer ? styles.headerBuyer : styles.headerSeller]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+      {header}
 
-        <TouchableOpacity style={styles.headerInfo}>
-          <View style={styles.headerAvatarContainer}>
-            <View style={[
-              styles.headerAvatar,
-              isBuyer ? styles.headerAvatarBuyer : styles.headerAvatarSeller
-            ]}>
-              <Ionicons
-                name="person"
-                size={18}
-                color={isBuyer ? "#4CAF50" : "#2196F3"}
-              />
-            </View>
+      {/* Item context card with one role-appropriate action */}
+      <View style={styles.itemPreviewCard}>
+        {itemImage ? (
+          <Image source={{ uri: itemImage }} style={styles.itemPreviewImage} resizeMode="cover" />
+        ) : (
+          <View style={[styles.itemPreviewImage, styles.itemPreviewPlaceholder]}>
+            <Ionicons name="image-outline" size={20} color="#B39BD5" />
           </View>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>{otherUserName}</Text>
-            <View style={styles.roleIndicator}>
-              <Ionicons
-                name={isBuyer ? "cart" : "storefront"}
-                size={12}
-                color="rgba(255,255,255,0.8)"
-              />
-              <Text style={styles.roleText}>
-                {isBuyer ? "You're buying" : "You're selling"}
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.moreButton}>
-          <Ionicons name="ellipsis-vertical" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Item Preview Card */}
-      <TouchableOpacity style={[
-        styles.itemPreviewCard,
-        isBuyer ? styles.itemPreviewBuyer : styles.itemPreviewSeller
-      ]}>
-        <Image
-          source={itemImage ? { uri: itemImage } : require('../images/grey_circle.png')}
-          style={styles.itemPreviewImage}
-          resizeMode="cover"
-        />
+        )}
         <View style={styles.itemPreviewInfo}>
           <Text style={styles.itemPreviewTitle} numberOfLines={1}>{itemTitle}</Text>
-          <Text style={[
-            styles.itemPreviewPrice,
-            isBuyer ? styles.priceBuyer : styles.priceSeller
-          ]}>
-            ${itemPrice}
-          </Text>
+          <Text style={styles.itemPreviewPrice}>${itemPrice}</Text>
         </View>
-
-        {/* Role-specific quick actions */}
-        <View style={styles.itemPreviewActions}>
-          {isBuyer ? (
-            <>
-              <TouchableOpacity
-                style={[styles.itemPreviewAction, styles.actionBuyer]}
-                onPress={handleMakeOffer}
-              >
-                <MaterialCommunityIcons name="tag-outline" size={18} color="#2196F3" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.itemPreviewAction, styles.actionBuyer]}
-                onPress={handleScheduleMeetup}
-              >
-                <Ionicons name="calendar-outline" size={18} color="#2196F3" />
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity
-                style={[styles.itemPreviewAction, styles.actionSeller]}
-                onPress={handleAcceptOffer}
-              >
-                <Ionicons name="checkmark-circle-outline" size={18} color="#4CAF50" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.itemPreviewAction, styles.actionSeller]}
-                onPress={handleMarkAsSold}
-              >
-                <Ionicons name="pricetag-outline" size={18} color="#4CAF50" />
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </TouchableOpacity>
+        {isBuyer ? (
+          <TouchableOpacity style={styles.itemActionChip} onPress={handleMakeOffer}>
+            <Ionicons name="pricetag-outline" size={14} color="#502E82" />
+            <Text style={styles.itemActionText}>Make offer</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.itemActionChip} onPress={handleMarkAsSold}>
+            <Ionicons name="checkmark-circle-outline" size={14} color="#502E82" />
+            <Text style={styles.itemActionText}>Mark sold</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Messages List */}
       <FlatList
@@ -502,12 +319,10 @@ export default function ChatScreen({ chat, item, onBack }) {
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons
-              name={isBuyer ? "cart-outline" : "storefront-outline"}
-              size={48}
-              color={isBuyer ? "#2196F3" : "#4CAF50"}
-            />
-            <Text style={styles.emptyText}>Start the conversation!</Text>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="chatbubble-ellipses-outline" size={36} color="#502E82" />
+            </View>
+            <Text style={styles.emptyText}>Start the conversation</Text>
             <Text style={styles.emptySubtext}>
               {isBuyer
                 ? `Ask ${otherUserName} about "${itemTitle}"`
@@ -521,63 +336,27 @@ export default function ChatScreen({ chat, item, onBack }) {
       {/* Quick Replies */}
       {showQuickReplies && messages.length === 0 && (
         <View style={styles.quickRepliesContainer}>
-          <Text style={styles.quickRepliesLabel}>
-            {isBuyer ? "Buyer quick replies:" : "Seller quick replies:"}
-          </Text>
           <View style={styles.quickReplies}>
             {quickReplies.map((reply, index) => (
               <TouchableOpacity
                 key={index}
-                style={[
-                  styles.quickReplyButton,
-                  isBuyer ? styles.quickReplyBuyer : styles.quickReplySeller
-                ]}
+                style={styles.quickReplyButton}
                 onPress={() => handleQuickReply(reply)}
               >
-                <Text style={[
-                  styles.quickReplyText,
-                  isBuyer ? styles.quickReplyTextBuyer : styles.quickReplyTextSeller
-                ]}>
-                  {reply}
-                </Text>
+                <Text style={styles.quickReplyText}>{reply}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
       )}
 
-      {/* Seller Action Bar */}
-      {!isBuyer && (
-        <View style={styles.sellerActionsBar}>
-          <TouchableOpacity style={styles.sellerActionBtn} onPress={handleAcceptOffer}>
-            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-            <Text style={styles.sellerActionText}>Accept</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.sellerActionBtn} onPress={handleDeclineOffer}>
-            <Ionicons name="close-circle" size={20} color="#FF6B6B" />
-            <Text style={styles.sellerActionText}>Decline</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.sellerActionBtn} onPress={handleSuggestMeetup}>
-            <Ionicons name="location" size={20} color="#FF9800" />
-            <Text style={styles.sellerActionText}>Meetup</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.sellerActionBtn} onPress={handleMarkAsSold}>
-            <Ionicons name="pricetag" size={20} color="#9C27B0" />
-            <Text style={styles.sellerActionText}>Sold</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Input Bar */}
       <View style={styles.inputContainer}>
-        <TouchableOpacity style={styles.attachButton}>
-          <Ionicons name="add-circle-outline" size={26} color={isBuyer ? "#2196F3" : "#4CAF50"} />
-        </TouchableOpacity>
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
             placeholder="Type a message..."
-            placeholderTextColor="#999999"
+            placeholderTextColor="#9B91A8"
             value={inputText}
             onChangeText={setInputText}
             multiline
@@ -588,19 +367,19 @@ export default function ChatScreen({ chat, item, onBack }) {
         <TouchableOpacity
           style={[
             styles.sendButton,
-            isBuyer ? styles.sendButtonBuyer : styles.sendButtonSeller,
             (inputText.trim() === '' || isSending) && styles.sendButtonDisabled
           ]}
           onPress={() => handleSend()}
           disabled={inputText.trim() === '' || isSending}
+          accessibilityLabel="Send message"
         >
           {isSending ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <Ionicons
-              name="send"
+              name="arrow-up"
               size={20}
-              color={inputText.trim() === '' ? '#CCCCCC' : '#FFFFFF'}
+              color={inputText.trim() === '' ? '#B9B3C4' : '#FFFFFF'}
             />
           )}
         </TouchableOpacity>
@@ -612,20 +391,15 @@ export default function ChatScreen({ chat, item, onBack }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F6F4FA',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 60,
+    backgroundColor: '#502E82',
+    paddingTop: 56,
     paddingBottom: 12,
     paddingHorizontal: 16,
-  },
-  headerBuyer: {
-    backgroundColor: '#1976D2',
-  },
-  headerSeller: {
-    backgroundColor: '#388E3C',
   },
   backButton: {
     width: 40,
@@ -637,48 +411,30 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginHorizontal: 8,
   },
-  headerAvatarContainer: {
-    position: 'relative',
-  },
   headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerAvatarBuyer: {
-    backgroundColor: '#E8F5E9',
-  },
-  headerAvatarSeller: {
-    backgroundColor: '#E3F2FD',
-  },
   headerTextContainer: {
-    marginLeft: 12,
-    flex: 1,
+    marginLeft: 10,
   },
   headerTitle: {
     fontSize: 16,
     fontFamily: 'Poppins_600SemiBold',
     color: '#FFFFFF',
   },
-  roleIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
   roleText: {
     fontSize: 12,
     fontFamily: 'Poppins_400Regular',
-    color: 'rgba(255,255,255,0.8)',
-  },
-  moreButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    color: '#D8CCEC',
+    marginTop: -2,
   },
   loadingContainer: {
     flex: 1,
@@ -699,111 +455,77 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  itemPreviewBuyer: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#2196F3',
-  },
-  itemPreviewSeller: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#4CAF50',
+    borderBottomColor: '#EDE8F4',
   },
   itemPreviewImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
-    backgroundColor: '#F0F0F0',
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#F3EFF9',
+  },
+  itemPreviewPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   itemPreviewInfo: {
     flex: 1,
     marginLeft: 12,
+    marginRight: 8,
   },
   itemPreviewTitle: {
     fontSize: 14,
     fontFamily: 'Poppins_500Medium',
-    color: '#333333',
-    marginBottom: 2,
+    color: '#1F1B29',
   },
   itemPreviewPrice: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Poppins_600SemiBold',
+    color: '#502E82',
+    marginTop: -1,
   },
-  priceBuyer: {
-    color: '#2196F3',
-  },
-  priceSeller: {
-    color: '#4CAF50',
-  },
-  itemPreviewActions: {
+  itemActionChip: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  itemPreviewAction: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#F3EAFA',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    height: 32,
   },
-  actionBuyer: {
-    backgroundColor: '#E3F2FD',
-  },
-  actionSeller: {
-    backgroundColor: '#E8F5E9',
+  itemActionText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
+    color: '#502E82',
   },
   messagesList: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    paddingBottom: 10,
     flexGrow: 1,
   },
   messageContainer: {
-    marginBottom: 12,
+    marginBottom: 10,
     maxWidth: '80%',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
   },
   userMessageContainer: {
     alignSelf: 'flex-end',
   },
-  sellerMessageContainer: {
+  otherMessageContainer: {
     alignSelf: 'flex-start',
-  },
-  otherAvatarSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  avatarSeller: {
-    backgroundColor: '#E8F5E9',
-  },
-  avatarBuyer: {
-    backgroundColor: '#E3F2FD',
   },
   messageBubble: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
-    maxWidth: '100%',
   },
   userBubble: {
-    backgroundColor: '#B39BD5',
-    borderBottomRightRadius: 4,
+    backgroundColor: '#502E82',
+    borderBottomRightRadius: 6,
   },
   otherBubble: {
     backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderBottomLeftRadius: 6,
   },
   messageText: {
     fontSize: 15,
@@ -814,13 +536,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   otherMessageText: {
-    color: '#333333',
+    color: '#1F1B29',
   },
   messageFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    marginTop: 4,
+    marginTop: 3,
     gap: 4,
   },
   timestamp: {
@@ -828,13 +550,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_400Regular',
   },
   userTimestamp: {
-    color: '#F0E6FF',
+    color: '#D8CCEC',
   },
   otherTimestamp: {
-    color: '#999999',
-  },
-  readReceipt: {
-    marginLeft: 2,
+    color: '#9B91A8',
   },
   emptyContainer: {
     flex: 1,
@@ -842,32 +561,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 60,
   },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F3EAFA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyText: {
     marginTop: 16,
     fontSize: 18,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
+    color: '#1F1B29',
   },
   emptySubtext: {
     marginTop: 4,
     fontSize: 14,
     fontFamily: 'Poppins_400Regular',
-    color: '#999999',
+    color: '#9B91A8',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
   quickRepliesContainer: {
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  quickRepliesLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    color: '#999999',
-    marginBottom: 8,
+    paddingBottom: 10,
   },
   quickReplies: {
     flexDirection: 'row',
@@ -878,45 +596,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-  },
-  quickReplyBuyer: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#BBDEFB',
-  },
-  quickReplySeller: {
-    backgroundColor: '#E8F5E9',
-    borderColor: '#C8E6C9',
+    borderColor: '#E8E3F1',
   },
   quickReplyText: {
     fontSize: 13,
     fontFamily: 'Poppins_500Medium',
-  },
-  quickReplyTextBuyer: {
-    color: '#1976D2',
-  },
-  quickReplyTextSeller: {
-    color: '#388E3C',
-  },
-  sellerActionsBar: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    justifyContent: 'space-around',
-  },
-  sellerActionBtn: {
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  sellerActionText: {
-    fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
-    color: '#666666',
-    marginTop: 2,
+    color: '#502E82',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -926,21 +613,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingBottom: Platform.OS === 'ios' ? 30 : 10,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: '#EDE8F4',
     gap: 8,
-  },
-  attachButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   inputWrapper: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 24,
+    backgroundColor: '#F3EFF9',
+    borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
@@ -948,7 +629,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: 'Poppins_400Regular',
-    color: '#333333',
+    color: '#1F1B29',
     maxHeight: 100,
     paddingVertical: 4,
   },
@@ -956,16 +637,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: '#502E82',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendButtonBuyer: {
-    backgroundColor: '#2196F3',
-  },
-  sendButtonSeller: {
-    backgroundColor: '#4CAF50',
-  },
   sendButtonDisabled: {
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#EDE8F4',
   },
 });

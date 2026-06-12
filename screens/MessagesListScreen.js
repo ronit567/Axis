@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, Image, TextInput } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, Image, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
@@ -28,10 +28,10 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffMinutes < 1) return 'Just now';
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffMinutes < 60) return `${diffMinutes}m`;
+    if (diffHours < 24) return `${diffHours}h`;
     if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays < 7) return `${diffDays}d`;
     return date.toLocaleDateString();
   };
 
@@ -60,11 +60,7 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
     });
   }, [searchText, activeTab, conversations]);
 
-  // Count conversations by type
-  const buyingCount = conversations.filter(c => c.isBuyer).length;
-  const sellingCount = conversations.filter(c => !c.isBuyer).length;
-
-  // Count unread messages by type
+  // Unread counts power the tab badges
   const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unread || 0), 0);
   const buyingUnread = conversations.filter(c => c.isBuyer).reduce((sum, conv) => sum + (conv.unread || 0), 0);
   const sellingUnread = conversations.filter(c => !c.isBuyer).reduce((sum, conv) => sum + (conv.unread || 0), 0);
@@ -81,16 +77,14 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
       ? `${item.otherUser.firstName || ''} ${item.otherUser.lastName || ''}`.trim() || 'User'
       : 'User';
     const itemTitle = item.listing?.title || 'Item';
-    const itemPrice = item.listing?.price || 0;
+    const itemPrice = item.listing?.price;
     const itemImage = item.listing?.imageUrl;
     const isBuying = item.isBuyer;
+    const hasUnread = item.unread > 0;
 
     return (
       <TouchableOpacity
-        style={[
-          styles.chatItem,
-          isBuying ? styles.chatItemBuying : styles.chatItemSelling
-        ]}
+        style={styles.chatItem}
         onPress={() => onChatPress({
           ...item,
           sellerName: otherUserName,
@@ -98,75 +92,40 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
           conversationId: item._id,
           isBuyer: isBuying,
         })}
-        activeOpacity={0.7}
+        activeOpacity={0.6}
       >
-        {/* Role indicator stripe */}
-        <View style={[
-          styles.roleStripe,
-          isBuying ? styles.roleStripeBuying : styles.roleStripeSelling
-        ]} />
-
-        {/* Item Thumbnail */}
-        <View style={styles.thumbnailContainer}>
-          <Image
-            source={itemImage ? { uri: itemImage } : require('../images/grey_circle.png')}
-            style={styles.itemThumbnail}
-            resizeMode="cover"
-          />
-          <View style={[
-            styles.priceTag,
-            isBuying ? styles.priceTagBuying : styles.priceTagSelling
-          ]}>
-            <Text style={styles.priceTagText}>${itemPrice}</Text>
+        {/* Listing thumbnail anchors the conversation to the item */}
+        {itemImage ? (
+          <Image source={{ uri: itemImage }} style={styles.itemThumbnail} resizeMode="cover" />
+        ) : (
+          <View style={[styles.itemThumbnail, styles.thumbnailPlaceholder]}>
+            <Ionicons name="image-outline" size={22} color="#B39BD5" />
           </View>
-        </View>
-
-        {/* Avatar */}
-        <View style={styles.avatarContainer}>
-          <View style={[
-            styles.avatar,
-            isBuying ? styles.avatarBuying : styles.avatarSelling
-          ]}>
-            <Ionicons name="person" size={20} color={isBuying ? "#2196F3" : "#4CAF50"} />
-          </View>
-        </View>
+        )}
 
         <View style={styles.chatContent}>
           <View style={styles.chatHeader}>
-            <View style={styles.nameContainer}>
-              <Text style={styles.sellerName}>{otherUserName}</Text>
-              <View style={[
-                styles.typeBadge,
-                isBuying ? styles.typeBadgeBuying : styles.typeBadgeSelling
-              ]}>
-                <Ionicons
-                  name={isBuying ? "cart" : "storefront"}
-                  size={10}
-                  color={isBuying ? "#2196F3" : "#4CAF50"}
-                />
-                <Text style={[
-                  styles.typeBadgeText,
-                  isBuying ? styles.typeBadgeTextBuying : styles.typeBadgeTextSelling
-                ]}>
-                  {isBuying ? 'Buying' : 'Selling'}
-                </Text>
-              </View>
+            <Text style={styles.personName} numberOfLines={1}>{otherUserName}</Text>
+            <View style={[styles.roleChip, !isBuying && styles.roleChipSelling]}>
+              <Text style={[styles.roleChipText, !isBuying && styles.roleChipTextSelling]}>
+                {isBuying ? 'Buying' : 'Selling'}
+              </Text>
             </View>
             <Text style={styles.timestamp}>{formatTimestamp(item.lastMessageAt)}</Text>
           </View>
-          <Text style={styles.itemTitle} numberOfLines={1}>{itemTitle}</Text>
+          <Text style={styles.itemTitle} numberOfLines={1}>
+            {itemTitle}
+            {itemPrice != null ? `  ·  $${itemPrice}` : ''}
+          </Text>
           <View style={styles.messageRow}>
             <Text
-              style={[styles.lastMessage, item.unread > 0 && styles.unreadMessage]}
+              style={[styles.lastMessage, hasUnread && styles.unreadMessage]}
               numberOfLines={1}
             >
               {item.lastMessageText || 'No messages yet'}
             </Text>
-            {item.unread > 0 && (
-              <View style={[
-                styles.unreadBadge,
-                isBuying ? styles.unreadBadgeBuying : styles.unreadBadgeSelling
-              ]}>
+            {hasUnread && (
+              <View style={styles.unreadBadge}>
                 <Text style={styles.unreadBadgeText}>{item.unread}</Text>
               </View>
             )}
@@ -178,79 +137,42 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <View style={[
-        styles.emptyIconContainer,
-        activeTab === 'Buying' ? styles.emptyIconBuying :
-        activeTab === 'Selling' ? styles.emptyIconSelling : styles.emptyIconAll
-      ]}>
+      <View style={styles.emptyIconContainer}>
         <Ionicons
           name={
-            activeTab === 'Buying' ? "cart-outline" :
-            activeTab === 'Selling' ? "storefront-outline" :
-            "chatbubbles-outline"
+            activeTab === 'Buying' ? 'bag-handle-outline' :
+            activeTab === 'Selling' ? 'pricetags-outline' :
+            'chatbubbles-outline'
           }
-          size={60}
-          color={
-            activeTab === 'Buying' ? "#2196F3" :
-            activeTab === 'Selling' ? "#4CAF50" :
-            "#B39BD5"
-          }
+          size={48}
+          color="#502E82"
         />
       </View>
       <Text style={styles.emptyTitle}>
-        {activeTab === 'All' ? "No messages yet" :
-         activeTab === 'Buying' ? "No buying conversations" :
-         "No selling conversations"}
+        {activeTab === 'All' ? 'No messages yet' :
+         activeTab === 'Buying' ? 'Nothing you\'re buying' :
+         'Nothing you\'re selling'}
       </Text>
       <Text style={styles.emptySubtitle}>
         {activeTab === 'All'
-          ? "Start a conversation by messaging a seller on an item you're interested in"
+          ? 'Message a seller about an item and the conversation will show up here'
           : activeTab === 'Buying'
-            ? "When you contact sellers about items, your conversations will appear here"
-            : "When buyers message you about your listings, conversations will appear here"
+            ? 'When you contact sellers about items, those chats will appear here'
+            : 'When buyers message you about your listings, those chats will appear here'
         }
       </Text>
-      {activeTab === 'All' && (
-        <TouchableOpacity style={styles.browseButton} onPress={onBack}>
-          <Text style={styles.browseButtonText}>Browse Items</Text>
-        </TouchableOpacity>
-      )}
-      {activeTab === 'Selling' && (
-        <TouchableOpacity style={[styles.browseButton, styles.sellButton]} onPress={onBack}>
-          <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
-          <Text style={styles.browseButtonText}>Create a Listing</Text>
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity style={styles.browseButton} onPress={onBack}>
+        <Text style={styles.browseButtonText}>
+          {activeTab === 'Selling' ? 'Create a Listing' : 'Browse Items'}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 
-  if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Messages</Text>
-          </View>
-          <View style={styles.headerAction} />
-        </View>
-        {/* Skeleton rows preview the conversation list while loading */}
-        <View>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <SkeletonChatRow key={i} />
-          ))}
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+  const header = (
+    <View style={styles.header}>
+      <View style={styles.headerRow}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
@@ -261,98 +183,70 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
             </View>
           )}
         </View>
-        <TouchableOpacity style={styles.headerAction}>
-          <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.backButton} />
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#999999" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search messages..."
-            placeholderTextColor="#999999"
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-          {searchText.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchText('')}>
-              <Ionicons name="close-circle" size={20} color="#CCCCCC" />
-            </TouchableOpacity>
-          )}
+      {/* Search */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search" size={18} color="#9B91A8" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search messages"
+          placeholderTextColor="#9B91A8"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+        {searchText.length > 0 && (
+          <Pressable onPress={() => setSearchText('')} hitSlop={8} accessibilityLabel="Clear search">
+            <Ionicons name="close-circle" size={18} color="#C4BCD1" />
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        {header}
+        {/* Skeleton rows preview the conversation list while loading */}
+        <View style={styles.skeletonList}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <SkeletonChatRow key={i} />
+          ))}
         </View>
       </View>
+    );
+  }
 
-      {/* Tabs with counts */}
+  return (
+    <View style={styles.container}>
+      {header}
+
+      {/* Segmented tabs */}
       <View style={styles.tabsContainer}>
         {TABS.map((tab) => {
           const badgeCount = getTabBadgeCount(tab);
           const isActive = activeTab === tab;
-
           return (
             <TouchableOpacity
               key={tab}
-              style={[
-                styles.tab,
-                isActive && styles.activeTab,
-                tab === 'Buying' && isActive && styles.activeTabBuying,
-                tab === 'Selling' && isActive && styles.activeTabSelling,
-              ]}
+              style={[styles.tab, isActive && styles.activeTab]}
               onPress={() => setActiveTab(tab)}
+              accessibilityState={{ selected: isActive }}
             >
-              {tab !== 'All' && (
-                <Ionicons
-                  name={tab === 'Buying' ? "cart" : "storefront"}
-                  size={14}
-                  color={
-                    isActive
-                      ? (tab === 'Buying' ? '#2196F3' : '#4CAF50')
-                      : '#666666'
-                  }
-                />
-              )}
-              <Text style={[
-                styles.tabText,
-                isActive && styles.activeTabText,
-                tab === 'Buying' && isActive && styles.activeTabTextBuying,
-                tab === 'Selling' && isActive && styles.activeTabTextSelling,
-              ]}>
-                {tab}
-              </Text>
+              <Text style={[styles.tabText, isActive && styles.activeTabText]}>{tab}</Text>
               {badgeCount > 0 && (
-                <View style={[
-                  styles.tabBadge,
-                  tab === 'Buying' && styles.tabBadgeBuying,
-                  tab === 'Selling' && styles.tabBadgeSelling,
-                ]}>
-                  <Text style={styles.tabBadgeText}>{badgeCount}</Text>
+                <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>
+                    {badgeCount}
+                  </Text>
                 </View>
               )}
             </TouchableOpacity>
           );
         })}
       </View>
-
-      {/* Summary Stats */}
-      {conversations.length > 0 && (
-        <View style={styles.summaryContainer}>
-          <View style={styles.summaryItem}>
-            <Ionicons name="cart" size={16} color="#2196F3" />
-            <Text style={styles.summaryText}>
-              <Text style={styles.summaryCount}>{buyingCount}</Text> buying
-            </Text>
-          </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryItem}>
-            <Ionicons name="storefront" size={16} color="#4CAF50" />
-            <Text style={styles.summaryText}>
-              <Text style={styles.summaryCount}>{sellingCount}</Text> selling
-            </Text>
-          </View>
-        </View>
-      )}
 
       {/* Chat List */}
       <FlatList
@@ -373,13 +267,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   header: {
+    backgroundColor: '#502E82',
+    paddingTop: 56,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#502E82',
-    paddingTop: 60,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    marginBottom: 14,
   },
   backButton: {
     width: 40,
@@ -398,7 +297,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   headerBadge: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -407,79 +306,57 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerBadgeText: {
-    color: '#FFFFFF',
+    color: '#502E82',
     fontSize: 11,
     fontFamily: 'Poppins_600SemiBold',
-  },
-  headerAction: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchContainer: {
-    backgroundColor: '#502E82',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
+    height: 44,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
     fontFamily: 'Poppins_400Regular',
-    color: '#333333',
+    color: '#1F1B29',
     paddingVertical: 0,
+  },
+  skeletonList: {
+    paddingTop: 12,
   },
   tabsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 14,
     gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3EFF9',
     gap: 6,
   },
   activeTab: {
-    backgroundColor: '#F5F0FF',
-  },
-  activeTabBuying: {
-    backgroundColor: '#E3F2FD',
-  },
-  activeTabSelling: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#502E82',
   },
   tabText: {
     fontSize: 14,
     fontFamily: 'Poppins_500Medium',
-    color: '#666666',
+    color: '#6B6478',
   },
   activeTabText: {
-    color: '#502E82',
-  },
-  activeTabTextBuying: {
-    color: '#2196F3',
-  },
-  activeTabTextSelling: {
-    color: '#4CAF50',
+    color: '#FFFFFF',
   },
   tabBadge: {
-    backgroundColor: '#B39BD5',
+    backgroundColor: '#502E82',
     borderRadius: 8,
     minWidth: 16,
     height: 16,
@@ -487,189 +364,84 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabBadgeBuying: {
-    backgroundColor: '#2196F3',
-  },
-  tabBadgeSelling: {
-    backgroundColor: '#4CAF50',
+  tabBadgeActive: {
+    backgroundColor: '#FFFFFF',
   },
   tabBadgeText: {
     color: '#FFFFFF',
     fontSize: 10,
     fontFamily: 'Poppins_600SemiBold',
   },
-  summaryContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    backgroundColor: '#FAFAFA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  summaryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-  },
-  summaryDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#E0E0E0',
-  },
-  summaryText: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: '#666666',
-  },
-  summaryCount: {
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
+  tabBadgeTextActive: {
+    color: '#502E82',
   },
   chatList: {
-    paddingVertical: 4,
+    paddingBottom: 24,
   },
   emptyList: {
     flex: 1,
   },
   chatItem: {
     flexDirection: 'row',
-    padding: 16,
-    paddingLeft: 20,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
-    backgroundColor: '#FFFFFF',
-    position: 'relative',
-  },
-  chatItemBuying: {
-    backgroundColor: '#FAFCFF',
-  },
-  chatItemSelling: {
-    backgroundColor: '#FAFFFA',
-  },
-  roleStripe: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-  },
-  roleStripeBuying: {
-    backgroundColor: '#2196F3',
-  },
-  roleStripeSelling: {
-    backgroundColor: '#4CAF50',
-  },
-  thumbnailContainer: {
-    position: 'relative',
-    marginRight: 12,
+    borderBottomColor: '#F3EFF9',
   },
   itemThumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    backgroundColor: '#F0F0F0',
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#F3EFF9',
+    marginRight: 14,
   },
-  priceTag: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    backgroundColor: '#B39BD5',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  priceTagBuying: {
-    backgroundColor: '#2196F3',
-  },
-  priceTagSelling: {
-    backgroundColor: '#4CAF50',
-  },
-  priceTagText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontFamily: 'Poppins_600SemiBold',
-  },
-  avatarContainer: {
-    position: 'absolute',
-    top: 12,
-    left: 60,
-    zIndex: 1,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F5F0FF',
+  thumbnailPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  avatarBuying: {
-    backgroundColor: '#E3F2FD',
-  },
-  avatarSelling: {
-    backgroundColor: '#E8F5E9',
   },
   chatContent: {
     flex: 1,
-    justifyContent: 'center',
-    marginLeft: 24,
   },
   chatHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 2,
-  },
-  nameContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flex: 1,
+    marginBottom: 2,
   },
-  sellerName: {
+  personName: {
     fontSize: 15,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
+    color: '#1F1B29',
+    flexShrink: 1,
   },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 4,
+  roleChip: {
+    backgroundColor: '#F3EAFA',
+    borderRadius: 6,
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 1,
   },
-  typeBadgeBuying: {
-    backgroundColor: '#E3F2FD',
+  roleChipSelling: {
+    backgroundColor: '#502E82',
   },
-  typeBadgeSelling: {
-    backgroundColor: '#E8F5E9',
-  },
-  typeBadgeText: {
+  roleChipText: {
     fontSize: 10,
     fontFamily: 'Poppins_500Medium',
-    color: '#4CAF50',
+    color: '#502E82',
   },
-  typeBadgeTextBuying: {
-    color: '#2196F3',
-  },
-  typeBadgeTextSelling: {
-    color: '#4CAF50',
+  roleChipTextSelling: {
+    color: '#FFFFFF',
   },
   timestamp: {
     fontSize: 12,
     fontFamily: 'Poppins_400Regular',
-    color: '#999999',
+    color: '#9B91A8',
+    marginLeft: 'auto',
   },
   itemTitle: {
     fontSize: 13,
     fontFamily: 'Poppins_500Medium',
-    color: '#B39BD5',
+    color: '#7A5FA8',
     marginBottom: 2,
   },
   messageRow: {
@@ -680,28 +452,22 @@ const styles = StyleSheet.create({
   lastMessage: {
     fontSize: 14,
     fontFamily: 'Poppins_400Regular',
-    color: '#666666',
+    color: '#6B6478',
     flex: 1,
     marginRight: 8,
   },
   unreadMessage: {
     fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
+    color: '#1F1B29',
   },
   unreadBadge: {
-    backgroundColor: '#B39BD5',
+    backgroundColor: '#502E82',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
     paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  unreadBadgeBuying: {
-    backgroundColor: '#2196F3',
-  },
-  unreadBadgeSelling: {
-    backgroundColor: '#4CAF50',
   },
   unreadBadgeText: {
     color: '#FFFFFF',
@@ -715,48 +481,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#F5F0FF',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#F3EAFA',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
   },
-  emptyIconAll: {
-    backgroundColor: '#F5F0FF',
-  },
-  emptyIconBuying: {
-    backgroundColor: '#E3F2FD',
-  },
-  emptyIconSelling: {
-    backgroundColor: '#E8F5E9',
-  },
   emptyTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
+    color: '#1F1B29',
     marginBottom: 8,
   },
   emptySubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Poppins_400Regular',
-    color: '#999999',
+    color: '#9B91A8',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 21,
     marginBottom: 24,
   },
   browseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#B39BD5',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    backgroundColor: '#502E82',
+    paddingHorizontal: 28,
+    paddingVertical: 13,
     borderRadius: 24,
-  },
-  sellButton: {
-    backgroundColor: '#4CAF50',
   },
   browseButtonText: {
     fontSize: 15,
