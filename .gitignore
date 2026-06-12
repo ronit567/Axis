@@ -28,4 +28,10 @@ docs/
 # Editor swap files
 *.swp
 
+# AI agent tooling (local only)
 .claude
+.agents/
+AGENTS.md
+CLAUDE.md
+skills-lock.json
+convex/_generated/ai/
