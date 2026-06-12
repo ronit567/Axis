@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Image, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform, Animated, ActivityIndicator, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthActions } from '@convex-dev/auth/react';
 import ErrorModal from '../components/ErrorModal';
 
@@ -15,6 +16,7 @@ export default function SignInScreen({
 }) {
   const { signIn } = useAuthActions();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -112,24 +114,43 @@ export default function SignInScreen({
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
-                placeholder=""
+                placeholder="name@uwo.ca"
+                placeholderTextColor="#B9B3C4"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
                 returnKeyType="next"
               />
-              
-              <Text style={styles.inputLabel}>Choose a password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder=""
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-              />
+
+              <Text style={styles.inputLabel}>Your password</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder=""
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="current-password"
+                  textContentType="password"
+                  returnKeyType="done"
+                  onSubmitEditing={handleSignIn}
+                />
+                <Pressable
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={8}
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={22}
+                    color="#4b307d"
+                  />
+                </Pressable>
+              </View>
             </View>
             
             <View style={styles.signInButtonContainerForm}>
@@ -250,8 +271,25 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     paddingHorizontal: 20,
     fontSize: 16,
-    fontFamily: 'HammersmithOne_400Regular',
+    fontFamily: 'Poppins_400Regular',
     backgroundColor: '#FFFFFF',
+  },
+  passwordContainer: {
+    width: '100%',
+    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#4b307d',
+    borderRadius: 25,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Poppins_400Regular',
+    paddingVertical: 0,
   },
   signInButtonContainerForm: {
     marginTop: 20,

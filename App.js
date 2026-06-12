@@ -89,8 +89,13 @@ function AppContent() {
   const [socials, setSocials] = useState('');
   const [aboutYou, setAboutYou] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  // One shared enter transition: every navigation swaps the screen
+  // immediately and the new screen fades + slides in (from the right going
+  // forward, from the left going back). No fade-to-blank phase — that
+  // two-step fade-out/slide-in was what made the old flow feel choppy.
+  const transition = useRef(new Animated.Value(1)).current;
+  const directionRef = useRef(1); // 1 = forward, -1 = back
 
   const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { signIn, signOut } = useAuthActions();
@@ -111,101 +116,30 @@ function AppContent() {
     }
   }, [authLoading, isAuthenticated, currentScreen]);
 
+  // Replay the enter animation whenever the screen changes.
   useEffect(() => {
-    if (currentScreen === 'signin' || currentScreen === 'signup' || currentScreen === 'profileSetup') {
-      // Slide in from right and fade in
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      // Reset animations
-      slideAnim.setValue(0);
-      fadeAnim.setValue(1);
-    }
+    transition.setValue(0);
+    const animation = Animated.timing(transition, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
   }, [currentScreen]);
 
-  const navigateToSignIn = () => {
-    // Fade out current screen
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentScreen('signin');
-    });
+  const navigate = (screen, direction = 1) => {
+    directionRef.current = direction;
+    setCurrentScreen(screen);
   };
 
-  const navigateToSignUp = () => {
-    // Fade out current screen
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentScreen('signup');
-    });
-  };
-
-  const navigateToHome = () => {
-    // Slide out and fade out
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('home');
-      fadeAnim.setValue(1);
-    });
-  };
-
-  const navigateToProfileSetup = () => {
-    // Fade out current screen
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentScreen('profileSetup');
-    });
-  };
-
-  const navigateBackToSignUp = () => {
-    // Go back to signup screen from profile setup
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentScreen('signup');
-    });
-  };
-
-  const navigateToMainHome = () => {
-    // Navigate to the main home screen after login/signup
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentScreen('mainhome');
-    });
-  };
+  const navigateToSignIn = () => navigate('signin', 1);
+  const navigateToSignUp = () => navigate('signup', 1);
+  const navigateToHome = () => navigate('home', -1);
+  const navigateToProfileSetup = () => navigate('profileSetup', 1);
+  const navigateBackToSignUp = () => navigate('signup', -1);
+  const navigateToMainHome = () => navigate('mainhome', 1);
 
   const handleProfileComplete = async () => {
     // New sign-up: one call creates the account AND the profile row — the
@@ -267,15 +201,14 @@ function AppContent() {
     return <LoadingScreen />;
   }
 
-  const homeTranslateX = fadeAnim.interpolate({
+  // Enter offset: 48px from the direction of travel, settling to 0.
+  const enterTranslateX = transition.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 0],
+    outputRange: [directionRef.current * 48, 0],
   });
-
-  const signInTranslateX = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1000, 0],
-  });
+  const fadeAnim = transition;
+  const homeTranslateX = enterTranslateX;
+  const signInTranslateX = enterTranslateX;
 
   // Render appropriate screen based on current state
 
