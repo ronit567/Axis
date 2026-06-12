@@ -4,11 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import PressableScale from '../ui/PressableScale';
 
 export default function ListingCard({ listing, onPress, isSaved, onToggleSave }) {
-  // Get the first image URL or use placeholder (imageUrls is resolved
-  // server-side from the storage IDs in listing.images)
-  const imageSource = listing.imageUrls && listing.imageUrls[0]
-    ? { uri: listing.imageUrls[0] }
-    : require('../../images/grey_circle.png');
+  // First image URL, resolved server-side from the storage IDs in
+  // listing.images. No image → branded placeholder block.
+  const imageUrl = listing.imageUrls && listing.imageUrls[0];
 
   // Remote images fade in once loaded so cards don't pop harshly.
   const imageOpacity = useRef(new Animated.Value(0)).current;
@@ -32,12 +30,16 @@ export default function ListingCard({ listing, onPress, isSaved, onToggleSave })
   return (
     <PressableScale style={styles.card} onPress={onPress}>
       <View style={styles.imagePlaceholder}>
-        <Animated.Image
-          source={imageSource}
-          style={[styles.placeholderImage, { opacity: imageOpacity }]}
-          resizeMode="cover"
-          onLoad={handleImageLoad}
-        />
+        {imageUrl ? (
+          <Animated.Image
+            source={{ uri: imageUrl }}
+            style={[styles.placeholderImage, { opacity: imageOpacity }]}
+            resizeMode="cover"
+            onLoad={handleImageLoad}
+          />
+        ) : (
+          <Ionicons name="image-outline" size={32} color="#B39BD5" />
+        )}
         {/* Heart only appears when a save handler is wired in. Its own Pressable
             handles the tap, so hearting doesn't open the listing. */}
         {onToggleSave && (
@@ -117,7 +119,7 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#B39BD5',
+    color: '#502E82',
     marginBottom: 6,
     fontFamily: 'Poppins_600SemiBold',
   },

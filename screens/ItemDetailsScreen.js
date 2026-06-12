@@ -11,7 +11,7 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 
@@ -73,27 +73,6 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
     } catch (error) {
       console.log('Error sharing:', error);
     }
-  };
-
-  const handleMakeOffer = () => {
-    Alert.prompt(
-      'Make an Offer',
-      `Enter your offer for "${item.title}" (Listed at $${item.price})`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send Offer',
-          onPress: (value) => {
-            if (value && !isNaN(value)) {
-              Alert.alert('Offer Sent!', `Your offer of $${value} has been sent to the seller.`);
-            }
-          }
-        },
-      ],
-      'plain-text',
-      '',
-      'numeric'
-    );
   };
 
   // Owner-specific actions
@@ -209,11 +188,18 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           >
             {images.map((imageUrl, index) => (
               <View key={index} style={styles.imageContainer}>
-                <Image
-                  source={imageUrl ? { uri: imageUrl } : require('../images/grey_circle.png')}
-                  style={styles.itemImage}
-                  resizeMode="cover"
-                />
+                {imageUrl ? (
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={styles.itemImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[styles.itemImage, styles.imageMissing]}>
+                    <Ionicons name="image-outline" size={48} color="#B39BD5" />
+                    <Text style={styles.imageMissingText}>No photos yet</Text>
+                  </View>
+                )}
               </View>
             ))}
           </ScrollView>
@@ -304,9 +290,13 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           {/* Description */}
           <View style={styles.descriptionSection}>
             <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.descriptionText}>
-              {item.description || `This is a great ${item.title.toLowerCase()} in ${item.condition.toLowerCase()} condition. Perfect for students looking for quality items at affordable prices. Feel free to message me with any questions!`}
-            </Text>
+            {item.description ? (
+              <Text style={styles.descriptionText}>{item.description}</Text>
+            ) : (
+              <Text style={styles.descriptionEmpty}>
+                No description yet — message the seller for details.
+              </Text>
+            )}
           </View>
 
           {/* Meetup Preferences */}
@@ -343,26 +333,23 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           {!isOwner && (
             <View style={styles.sellerSection}>
               <Text style={styles.sectionTitle}>Seller</Text>
-              <TouchableOpacity style={styles.sellerCard}>
+              <View style={styles.sellerCard}>
                 <View style={styles.sellerAvatar}>
                   {sellerLoading ? (
                     <ActivityIndicator size="small" color="#B39BD5" />
+                  ) : sellerProfile?.avatarUrl ? (
+                    <Image source={{ uri: sellerProfile.avatarUrl }} style={styles.sellerAvatarImage} />
                   ) : (
-                    <Ionicons name="person" size={32} color="#B39BD5" />
+                    <Ionicons name="person" size={28} color="#B39BD5" />
                   )}
-                  <View style={styles.onlineIndicator} />
                 </View>
                 <View style={styles.sellerInfo}>
                   <Text style={styles.sellerName}>{sellerName}</Text>
                   {sellerMeta ? (
                     <Text style={styles.sellerMeta}>{sellerMeta}</Text>
                   ) : null}
-                  <View style={styles.sellerStats}>
-                    <Text style={styles.responseTime}>Responds quickly</Text>
-                  </View>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#CCCCCC" />
-              </TouchableOpacity>
+              </View>
             </View>
           )}
 
@@ -430,13 +417,17 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
                     onPress={() => onItemPress && onItemPress(similarItem)}
                   >
                     <View style={styles.similarImageContainer}>
-                      <Image
-                        source={similarItem.imageUrls && similarItem.imageUrls[0]
-                          ? { uri: similarItem.imageUrls[0] }
-                          : require('../images/grey_circle.png')}
-                        style={styles.similarImage}
-                        resizeMode="cover"
-                      />
+                      {similarItem.imageUrls && similarItem.imageUrls[0] ? (
+                        <Image
+                          source={{ uri: similarItem.imageUrls[0] }}
+                          style={styles.similarImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={[styles.similarImage, styles.imageMissing]}>
+                          <Ionicons name="image-outline" size={24} color="#B39BD5" />
+                        </View>
+                      )}
                     </View>
                     <Text style={styles.similarTitle} numberOfLines={1}>{similarItem.title}</Text>
                     <Text style={styles.similarPrice}>${similarItem.price}</Text>
@@ -471,13 +462,6 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
         </View>
       ) : (
         <View style={styles.bottomBar}>
-          <TouchableOpacity
-            style={styles.offerButton}
-            onPress={handleMakeOffer}
-          >
-            <MaterialCommunityIcons name="tag-outline" size={20} color="#B39BD5" />
-            <Text style={styles.offerButtonText}>Make Offer</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.chatButton}
             onPress={() => onChatWithSeller(item)}
@@ -716,6 +700,23 @@ const styles = StyleSheet.create({
     color: '#666666',
     lineHeight: 24,
   },
+  descriptionEmpty: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#9B91A8',
+    fontStyle: 'italic',
+  },
+  imageMissing: {
+    backgroundColor: '#F3EFF9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageMissingText: {
+    marginTop: 8,
+    fontSize: 13,
+    fontFamily: 'Poppins_400Regular',
+    color: '#9B91A8',
+  },
   meetupSection: {
     marginBottom: 24,
   },
@@ -766,18 +767,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-    position: 'relative',
+    overflow: 'hidden',
   },
-  onlineIndicator: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#4CAF50',
-    borderWidth: 2,
-    borderColor: '#F9F9F9',
+  sellerAvatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   sellerInfo: {
     flex: 1,
@@ -792,16 +787,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Poppins_400Regular',
     color: '#999999',
-    marginBottom: 4,
-  },
-  sellerStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  responseTime: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    color: '#4CAF50',
   },
   safetySection: {
     marginBottom: 24,
@@ -916,29 +901,12 @@ const styles = StyleSheet.create({
     elevation: 10,
     gap: 12,
   },
-  offerButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 8,
-    borderWidth: 2,
-    borderColor: '#B39BD5',
-  },
-  offerButtonText: {
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#B39BD5',
-  },
   chatButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#B39BD5',
+    backgroundColor: '#502E82',
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
@@ -970,7 +938,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#502E82',
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
