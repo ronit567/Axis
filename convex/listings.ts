@@ -20,7 +20,7 @@ const conditionValidator = v.union(
 );
 
 /** Attach resolved image URLs + seller summary so a card has all it needs. */
-async function hydrate(ctx: QueryCtx, listing: Doc<"listings">) {
+export async function hydrate(ctx: QueryCtx, listing: Doc<"listings">) {
   const seller = await ctx.db.get(listing.sellerId);
   return {
     ...listing,

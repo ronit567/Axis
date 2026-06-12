@@ -102,4 +102,14 @@ export default defineSchema({
     offerAmount: v.optional(v.number()),
     readAt: v.optional(v.number()),
   }).index("by_conversation", ["conversationId"]),
+
+  // A user's saved/wishlisted listings (one row per save). The
+  // by_user_and_listing index makes the toggle/unsave lookup a point read and
+  // doubles as the uniqueness guard so a listing can't be saved twice.
+  savedListings: defineTable({
+    userId: v.id("users"),
+    listingId: v.id("listings"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_and_listing", ["userId", "listingId"]),
 });

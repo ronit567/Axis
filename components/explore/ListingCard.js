@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function ListingCard({ listing, onPress }) {
+export default function ListingCard({ listing, onPress, isSaved, onToggleSave }) {
   // Get the first image URL or use placeholder (imageUrls is resolved
   // server-side from the storage IDs in listing.images)
   const imageSource = listing.imageUrls && listing.imageUrls[0]
@@ -15,6 +16,21 @@ export default function ListingCard({ listing, onPress }) {
           style={styles.placeholderImage}
           resizeMode="cover"
         />
+        {/* Heart only appears when a save handler is wired in. Its own Pressable
+            handles the tap, so hearting doesn't open the listing. */}
+        {onToggleSave && (
+          <Pressable
+            style={styles.heartButton}
+            hitSlop={8}
+            onPress={onToggleSave}
+          >
+            <Ionicons
+              name={isSaved ? 'heart' : 'heart-outline'}
+              size={20}
+              color={isSaved ? '#E0245E' : '#FFFFFF'}
+            />
+          </Pressable>
+        )}
       </View>
       <View style={styles.cardContent}>
         <Text style={styles.title} numberOfLines={1}>{listing.title}</Text>
@@ -46,6 +62,17 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 140,
     backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heartButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },

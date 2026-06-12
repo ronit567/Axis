@@ -26,6 +26,11 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
   // All reactive: ownership, seller card, and similar items
   const me = useQuery(api.users.current);
   const isOwner = me != null && me._id === item.sellerId;
+
+  // Saved state for this listing (heart). savedIds returns [] when signed out.
+  const savedIds = useQuery(api.saved.savedIds);
+  const isSaved = (savedIds ?? []).includes(item._id);
+  const toggleSave = useMutation(api.saved.toggleSave);
   const sellerProfile = useQuery(api.users.publicProfile, { userId: item.sellerId });
   const sellerLoading = sellerProfile === undefined;
   const categoryFeed = useQuery(api.listings.feed, { category: item.category, limit: 5 });
@@ -169,6 +174,18 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           <Ionicons name="arrow-back" size={24} color="#333333" />
         </TouchableOpacity>
         <View style={styles.headerActions}>
+          {!isOwner && (
+            <TouchableOpacity
+              onPress={() => toggleSave({ listingId: item._id })}
+              style={styles.headerButton}
+            >
+              <Ionicons
+                name={isSaved ? 'heart' : 'heart-outline'}
+                size={24}
+                color={isSaved ? '#E0245E' : '#333333'}
+              />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={handleShare} style={styles.headerButton}>
             <Ionicons name="share-outline" size={24} color="#333333" />
           </TouchableOpacity>

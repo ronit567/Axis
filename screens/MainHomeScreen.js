@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import ListingCard from '../components/explore/ListingCard';
 import FilterModal from '../components/explore/FilterModal';
@@ -12,6 +12,7 @@ import ItemDetailsScreen from './ItemDetailsScreen';
 import ChatScreen from './ChatScreen';
 import CreateListingScreen from './CreateListingScreen';
 import ProfileScreen from './ProfileScreen';
+import SavedScreen from './SavedScreen';
 
 export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const [searchText, setSearchText] = useState('');
@@ -41,6 +42,15 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     search: isSearching ? debouncedSearch : undefined,
   });
   const trendingItems = useQuery(api.listings.trending, { limit: 10 });
+
+  // Saved listing IDs drive the heart state on every card; the Set makes the
+  // per-card lookup O(1). toggleSave flips a listing's saved state.
+  const savedIds = useQuery(api.saved.savedIds);
+  const savedSet = useMemo(() => new Set(savedIds ?? []), [savedIds]);
+  const toggleSave = useMutation(api.saved.toggleSave);
+  const handleToggleSave = (listingId) => {
+    toggleSave({ listingId });
+  };
 
   const isLoading = feed === undefined || trendingItems === undefined;
   const forYouItems = feed ?? [];
@@ -153,6 +163,10 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     setCurrentScreen('profile');
   };
 
+  const handleSavedPress = () => {
+    setCurrentScreen('saved');
+  };
+
   const handleEditListing = (listing) => {
     setSelectedItem(listing);
     setCurrentScreen('editListing');
@@ -216,6 +230,15 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         onLogout={onLogout}
         onItemPress={handleItemPress}
         onEditListing={handleEditListing}
+      />
+    );
+  }
+
+  if (currentScreen === 'saved') {
+    return (
+      <SavedScreen
+        onBack={handleBackToHome}
+        onItemPress={handleItemPress}
       />
     );
   }
@@ -425,7 +448,16 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
               keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <View style={styles.horizontalCard}>
-                  <ListingCard listing={item} onPress={() => handleItemPress(item)} />
+                  <ListingCard
+                    listing={item}
+                    onPress={() => handleItemPress(item)}
+                    isSaved={savedSet.has(item._id)}
+                    onToggleSave={
+                      item.sellerId === userId
+                        ? undefined
+                        : () => handleToggleSave(item._id)
+                    }
+                  />
                 </View>
               )}
               contentContainerStyle={styles.horizontalList}
@@ -446,7 +478,16 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
               keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <View style={styles.horizontalCard}>
-                  <ListingCard listing={item} onPress={() => handleItemPress(item)} />
+                  <ListingCard
+                    listing={item}
+                    onPress={() => handleItemPress(item)}
+                    isSaved={savedSet.has(item._id)}
+                    onToggleSave={
+                      item.sellerId === userId
+                        ? undefined
+                        : () => handleToggleSave(item._id)
+                    }
+                  />
                 </View>
               )}
               contentContainerStyle={styles.horizontalList}
@@ -467,7 +508,16 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
               keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <View style={styles.horizontalCard}>
-                  <ListingCard listing={item} onPress={() => handleItemPress(item)} />
+                  <ListingCard
+                    listing={item}
+                    onPress={() => handleItemPress(item)}
+                    isSaved={savedSet.has(item._id)}
+                    onToggleSave={
+                      item.sellerId === userId
+                        ? undefined
+                        : () => handleToggleSave(item._id)
+                    }
+                  />
                 </View>
               )}
               contentContainerStyle={styles.horizontalList}
@@ -511,7 +561,12 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
           <Ionicons name="home" size={28} color="#B39BD5" />
           <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
         </TouchableOpacity>
-        
+
+        <TouchableOpacity style={styles.navItem} onPress={handleSavedPress}>
+          <Ionicons name="heart-outline" size={28} color="#999999" />
+          <Text style={styles.navLabel}>Saved</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.sellButton} onPress={handleSellPress}>
           <View style={styles.addButtonCircle}>
             <Ionicons name="add" size={32} color="#FFFFFF" />
