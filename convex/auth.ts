@@ -23,19 +23,24 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
             "Axis is only available to Western students — sign up with your @uwo.ca email.",
           );
         }
-        const optional = (key: string) =>
-          typeof params[key] === "string" && (params[key] as string).trim()
-            ? (params[key] as string).trim()
-            : undefined;
-        return {
-          email,
-          firstName: optional("firstName"),
-          lastName: optional("lastName"),
-          program: optional("program"),
-          yearOfStudy: optional("yearOfStudy"),
-          bio: optional("bio"),
-          phone: optional("phone"),
-        };
+        // Only include keys that actually have a value — Convex's `profile`
+        // return type forbids `undefined`, so absent fields must be omitted
+        // rather than set to undefined.
+        const optionalFields: Record<string, string> = {};
+        for (const key of [
+          "firstName",
+          "lastName",
+          "program",
+          "yearOfStudy",
+          "bio",
+          "phone",
+        ]) {
+          const value = params[key];
+          if (typeof value === "string" && value.trim()) {
+            optionalFields[key] = value.trim();
+          }
+        }
+        return { email, ...optionalFields };
       },
     }),
   ],

@@ -61,8 +61,11 @@ export default function SignUpScreen({
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long');
+    // Must match the server rule in convex/auth.ts (Convex Auth's default
+    // Password provider requires >= 8 chars). Keeping these in sync avoids the
+    // raw "Invalid password" server error reaching the user.
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters long');
       setShowErrorModal(true);
       return;
     }
