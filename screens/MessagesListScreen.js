@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, Image, TextInput, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, Image, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
+import { SkeletonChatRow } from '../components/ui/Skeleton';
 
 const TABS = ['All', 'Buying', 'Selling'];
 
@@ -235,9 +236,11 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
           </View>
           <View style={styles.headerAction} />
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#B39BD5" />
-          <Text style={styles.loadingText}>Loading messages...</Text>
+        {/* Skeleton rows preview the conversation list while loading */}
+        <View>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <SkeletonChatRow key={i} />
+          ))}
         </View>
       </View>
     );
@@ -413,17 +416,6 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: '#999999',
   },
   searchContainer: {
     backgroundColor: '#502E82',

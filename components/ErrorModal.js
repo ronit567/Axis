@@ -1,10 +1,25 @@
-import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 
 /**
  * Error modal component for displaying authentication errors
  */
 export default function ErrorModal({ visible, onClose, title, message }) {
+  // Card springs up slightly as the backdrop fades in
+  const cardScale = useRef(new Animated.Value(0.9)).current;
+
+  useEffect(() => {
+    if (visible) {
+      cardScale.setValue(0.9);
+      Animated.spring(cardScale, {
+        toValue: 1,
+        speed: 30,
+        bounciness: 9,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
   return (
     <Modal
       animationType="fade"
@@ -13,13 +28,13 @@ export default function ErrorModal({ visible, onClose, title, message }) {
       onRequestClose={onClose}
     >
       <View style={styles.centeredView}>
-        <View style={styles.modalView}>
+        <Animated.View style={[styles.modalView, { transform: [{ scale: cardScale }] }]}>
           <Text style={styles.modalTitle}>{title || 'Error'}</Text>
-          
+
           <Text style={styles.modalText}>
             {message || 'An error occurred. Please try again.'}
           </Text>
-          
+
           <TouchableOpacity
             style={styles.button}
             onPress={onClose}
@@ -27,7 +42,7 @@ export default function ErrorModal({ visible, onClose, title, message }) {
           >
             <Text style={styles.buttonText}>OK</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

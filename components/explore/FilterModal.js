@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { PRICE_CAP } from './filters';
+import PressableScale from '../ui/PressableScale';
 
 const CATEGORIES = ['All', 'Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'];
 const CONDITIONS = ['All', 'Like New', 'Good', 'Fair'];
@@ -128,12 +129,12 @@ export default function FilterModal({
 
           {/* Modal Footer */}
           <View style={styles.modalFooter}>
-            <Pressable style={styles.resetButton} onPress={onResetFilters}>
+            <PressableScale style={styles.resetButton} onPress={onResetFilters}>
               <Text style={styles.resetButtonText}>Reset</Text>
-            </Pressable>
-            <Pressable style={styles.applyButton} onPress={onClose}>
+            </PressableScale>
+            <PressableScale style={styles.applyButton} onPress={onClose}>
               <Text style={styles.applyButtonText}>Apply Filters</Text>
-            </Pressable>
+            </PressableScale>
           </View>
         </View>
       </View>

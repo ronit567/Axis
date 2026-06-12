@@ -1,53 +1,63 @@
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { PRICE_CAP } from './filters';
 
 export default function ActiveFilters({
   filters,
   onUpdateFilters,
   onResetFilters,
+  hideCategory = false,
 }) {
-  const activeFilterCount = [
-    filters.category !== 'All',
-    filters.condition !== 'All',
-    filters.minPrice > 0 || filters.maxPrice < PRICE_CAP,
-  ].filter(Boolean).length;
+  const showCategory = !hideCategory && filters.category !== 'All';
+  const showCondition = filters.condition !== 'All';
+  const showPrice = filters.minPrice > 0 || filters.maxPrice < PRICE_CAP;
 
-  if (activeFilterCount === 0) {
+  if (!showCategory && !showCondition && !showPrice) {
     return null;
   }
 
   return (
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {filters.category !== 'All' && (
+        {showCategory && (
           <View style={styles.filterChip}>
             <Text style={styles.filterText}>{filters.category}</Text>
-            <Pressable onPress={() => onUpdateFilters({ ...filters, category: 'All' })}>
-              <Text style={styles.closeIcon}>✕</Text>
+            <Pressable
+              onPress={() => onUpdateFilters({ ...filters, category: 'All' })}
+              hitSlop={8}
+              accessibilityLabel={`Remove ${filters.category} filter`}
+            >
+              <Ionicons name="close" size={14} color="#502E82" />
             </Pressable>
           </View>
         )}
-        {filters.condition !== 'All' && (
+        {showCondition && (
           <View style={styles.filterChip}>
             <Text style={styles.filterText}>{filters.condition}</Text>
-            <Pressable onPress={() => onUpdateFilters({ ...filters, condition: 'All' })}>
-              <Text style={styles.closeIcon}>✕</Text>
+            <Pressable
+              onPress={() => onUpdateFilters({ ...filters, condition: 'All' })}
+              hitSlop={8}
+              accessibilityLabel={`Remove ${filters.condition} filter`}
+            >
+              <Ionicons name="close" size={14} color="#502E82" />
             </Pressable>
           </View>
         )}
-        {(filters.minPrice > 0 || filters.maxPrice < PRICE_CAP) && (
+        {showPrice && (
           <View style={styles.filterChip}>
             <Text style={styles.filterText}>
-              ${filters.minPrice}-{filters.maxPrice >= PRICE_CAP ? `$${PRICE_CAP}+` : `$${filters.maxPrice}`}
+              ${filters.minPrice}–{filters.maxPrice >= PRICE_CAP ? `$${PRICE_CAP}+` : `$${filters.maxPrice}`}
             </Text>
             <Pressable
               onPress={() => onUpdateFilters({ ...filters, minPrice: 0, maxPrice: PRICE_CAP })}
+              hitSlop={8}
+              accessibilityLabel="Remove price filter"
             >
-              <Text style={styles.closeIcon}>✕</Text>
+              <Ionicons name="close" size={14} color="#502E82" />
             </Pressable>
           </View>
         )}
-        <Pressable style={styles.clearAllButton} onPress={onResetFilters}>
+        <Pressable style={styles.clearAllButton} onPress={onResetFilters} hitSlop={8}>
           <Text style={styles.clearAllText}>Clear all</Text>
         </Pressable>
       </ScrollView>
@@ -58,15 +68,11 @@ export default function ActiveFilters({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'transparent',
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    paddingTop: 0,
-    paddingBottom: 16,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#F3EAFA',
     borderRadius: 16,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -74,24 +80,18 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   filterText: {
-    color: '#B39BD5',
+    color: '#502E82',
     fontSize: 13,
-    fontWeight: '600',
-    fontFamily: 'Poppins_600SemiBold',
-  },
-  closeIcon: {
-    color: '#B39BD5',
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Poppins_500Medium',
   },
   clearAllButton: {
     paddingVertical: 6,
     paddingHorizontal: 12,
+    justifyContent: 'center',
   },
   clearAllText: {
-    color: 'white',
+    color: '#502E82',
     fontSize: 13,
-    fontWeight: '600',
     textDecorationLine: 'underline',
     fontFamily: 'Poppins_600SemiBold',
   },

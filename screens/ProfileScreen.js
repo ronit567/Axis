@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
+import { Skeleton } from '../components/ui/Skeleton';
 
 export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemPress }) {
   const profile = useQuery(api.users.current);
@@ -125,9 +126,15 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
   };
 
   if (profile === undefined) {
+    // Skeleton previews the identity block while the profile loads
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color="#B39BD5" />
+      <View style={styles.container}>
+        <View style={styles.skeletonIdentity}>
+          <Skeleton width={96} height={96} borderRadius={48} />
+          <Skeleton width={160} height={18} style={styles.skeletonLine} />
+          <Skeleton width={200} height={13} style={styles.skeletonLine} />
+          <Skeleton width={130} height={13} style={styles.skeletonLine} />
+        </View>
       </View>
     );
   }
@@ -266,7 +273,10 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
         <View style={styles.listingsSection}>
           <Text style={styles.sectionTitle}>My Listings</Text>
           {myListings === undefined ? (
-            <ActivityIndicator color="#B39BD5" style={{ marginVertical: 24 }} />
+            <View style={styles.skeletonListings}>
+              <Skeleton width="100%" height={72} borderRadius={12} />
+              <Skeleton width="100%" height={72} borderRadius={12} style={styles.skeletonLine} />
+            </View>
           ) : myListings.length === 0 ? (
             <Text style={styles.emptyText}>You haven't listed anything yet.</Text>
           ) : (
@@ -352,9 +362,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  loadingContainer: {
-    justifyContent: 'center',
+  skeletonIdentity: {
     alignItems: 'center',
+    paddingTop: 140,
+  },
+  skeletonLine: {
+    marginTop: 14,
+  },
+  skeletonListings: {
+    marginTop: 4,
   },
   header: {
     flexDirection: 'row',

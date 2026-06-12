@@ -1,11 +1,26 @@
-import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 
 /**
  * Modal component to display email validation errors
  * Shows when user tries to sign up with non-school email
  */
 export default function EmailValidationModal({ visible, onClose, email }) {
+  // Card springs up slightly as the backdrop fades in
+  const cardScale = useRef(new Animated.Value(0.9)).current;
+
+  useEffect(() => {
+    if (visible) {
+      cardScale.setValue(0.9);
+      Animated.spring(cardScale, {
+        toValue: 1,
+        speed: 30,
+        bounciness: 9,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
   return (
     <Modal
       animationType="fade"
@@ -14,7 +29,7 @@ export default function EmailValidationModal({ visible, onClose, email }) {
       onRequestClose={onClose}
     >
       <View style={styles.centeredView}>
-        <View style={styles.modalView}>
+        <Animated.View style={[styles.modalView, { transform: [{ scale: cardScale }] }]}>
           <Text style={styles.modalTitle}>Invalid Email Domain</Text>
           
           <Text style={styles.modalText}>
@@ -43,7 +58,7 @@ export default function EmailValidationModal({ visible, onClose, email }) {
           >
             <Text style={styles.buttonText}>Got it</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

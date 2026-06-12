@@ -1,5 +1,5 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Animated, Pressable, ActivityIndicator } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Pressable } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
@@ -7,6 +7,9 @@ import ListingCard from '../components/explore/ListingCard';
 import FilterModal from '../components/explore/FilterModal';
 import ActiveFilters from '../components/explore/ActiveFilters';
 import { DEFAULT_FILTERS, PRICE_CAP } from '../components/explore/filters';
+import FadeInView from '../components/ui/FadeInView';
+import PressableScale from '../components/ui/PressableScale';
+import { SkeletonFeedSection } from '../components/ui/Skeleton';
 import MessagesListScreen from './MessagesListScreen';
 import ItemDetailsScreen from './ItemDetailsScreen';
 import ChatScreen from './ChatScreen';
@@ -14,12 +17,25 @@ import CreateListingScreen from './CreateListingScreen';
 import ProfileScreen from './ProfileScreen';
 import SavedScreen from './SavedScreen';
 
+// Always-visible labeled category chips — replaces the old hamburger circle
+// that hid icon-only category buttons behind a tap.
+const CATEGORY_CHIPS = [
+  { category: 'All', Icon: Ionicons, icon: 'grid-outline' },
+  { category: 'Books', Icon: Ionicons, icon: 'book-outline' },
+  { category: 'Electronics', Icon: Ionicons, icon: 'laptop-outline' },
+  { category: 'Furniture', Icon: MaterialCommunityIcons, icon: 'bed-outline' },
+  { category: 'Clothing', Icon: Ionicons, icon: 'shirt-outline' },
+  { category: 'Appliances', Icon: MaterialCommunityIcons, icon: 'fridge-outline' },
+  { category: 'Other', Icon: Ionicons, icon: 'cube-outline' },
+];
+
 export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const [searchText, setSearchText] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
-  const slideAnim = useRef(new Animated.Value(0)).current;
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+
+  // Header avatar mirrors the profile photo
+  const me = useQuery(api.users.current);
 
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState('home');
@@ -56,21 +72,15 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const forYouItems = feed ?? [];
   const recentItems = useMemo(() => (feed ?? []).slice(0, 10), [feed]);
 
-
-  const handlePinkCirclePress = () => {
-    const toValue = isExpanded ? 0 : 1;
-    setIsExpanded(!isExpanded);
-    
-    Animated.spring(slideAnim, {
-      toValue,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 40,
-    }).start();
-  };
-  
   const activeFilterCount = [
     filters.category !== 'All',
+    filters.condition !== 'All',
+    filters.minPrice > 0 || filters.maxPrice < PRICE_CAP,
+  ].filter(Boolean).length;
+
+  // Category selection is already visible in the chips row, so the active
+  // filters strip only needs to surface condition/price.
+  const modalFilterCount = [
     filters.condition !== 'All',
     filters.minPrice > 0 || filters.maxPrice < PRICE_CAP,
   ].filter(Boolean).length;
@@ -79,8 +89,12 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     setFilters(DEFAULT_FILTERS);
   };
   
+  // Chips toggle: tapping the selected category deselects back to All
   const handleCategoryFilterPress = (category) => {
-    setFilters({ ...filters, category });
+    setFilters({
+      ...filters,
+      category: filters.category === category ? 'All' : category,
+    });
   };
   
   // Filter function to apply filters to items
@@ -182,137 +196,146 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     setCurrentScreen('home');
   };
   
-  // Render different screens based on navigation state
+  // Render different screens based on navigation state. Each is wrapped in a
+  // keyed FadeInView so screen swaps animate in instead of hard-cutting.
   if (currentScreen === 'messagesList') {
     return (
-      <MessagesListScreen 
-        onBack={handleBackToHome}
-        onChatPress={handleChatPress}
-      />
+      <FadeInView key="messagesList" style={styles.screenWrap}>
+        <MessagesListScreen
+          onBack={handleBackToHome}
+          onChatPress={handleChatPress}
+        />
+      </FadeInView>
     );
   }
-  
+
   if (currentScreen === 'itemDetails' && selectedItem) {
     return (
-      <ItemDetailsScreen
-        item={selectedItem}
-        onBack={handleBackToHome}
-        onChatWithSeller={handleChatWithSeller}
-        onItemPress={handleItemPress}
-        onEditListing={handleEditListing}
-      />
+      <FadeInView key="itemDetails" style={styles.screenWrap}>
+        <ItemDetailsScreen
+          item={selectedItem}
+          onBack={handleBackToHome}
+          onChatWithSeller={handleChatWithSeller}
+          onItemPress={handleItemPress}
+          onEditListing={handleEditListing}
+        />
+      </FadeInView>
     );
   }
-  
+
   if (currentScreen === 'chat') {
     return (
-      <ChatScreen
-        chat={selectedChat}
-        item={selectedItem}
-        onBack={selectedItem ? handleBackToHome : handleBackToMessages}
-      />
+      <FadeInView key="chat" style={styles.screenWrap}>
+        <ChatScreen
+          chat={selectedChat}
+          item={selectedItem}
+          onBack={selectedItem ? handleBackToHome : handleBackToMessages}
+        />
+      </FadeInView>
     );
   }
 
   if (currentScreen === 'createListing') {
     return (
-      <CreateListingScreen
-        onBack={handleBackToHome}
-        onSuccess={handleListingCreated}
-      />
+      <FadeInView key="createListing" style={styles.screenWrap}>
+        <CreateListingScreen
+          onBack={handleBackToHome}
+          onSuccess={handleListingCreated}
+        />
+      </FadeInView>
     );
   }
 
   if (currentScreen === 'profile') {
     return (
-      <ProfileScreen
-        onBack={handleBackToHome}
-        onLogout={onLogout}
-        onItemPress={handleItemPress}
-        onEditListing={handleEditListing}
-      />
+      <FadeInView key="profile" style={styles.screenWrap}>
+        <ProfileScreen
+          onBack={handleBackToHome}
+          onLogout={onLogout}
+          onItemPress={handleItemPress}
+          onEditListing={handleEditListing}
+        />
+      </FadeInView>
     );
   }
 
   if (currentScreen === 'saved') {
     return (
-      <SavedScreen
-        onBack={handleBackToHome}
-        onItemPress={handleItemPress}
-      />
+      <FadeInView key="saved" style={styles.screenWrap}>
+        <SavedScreen
+          onBack={handleBackToHome}
+          onItemPress={handleItemPress}
+        />
+      </FadeInView>
     );
   }
 
   if (currentScreen === 'editListing' && selectedItem) {
     return (
-      <CreateListingScreen
-        listing={selectedItem}
-        onBack={handleBackToProfile}
-        onSuccess={handleBackToProfile}
-      />
+      <FadeInView key="editListing" style={styles.screenWrap}>
+        <CreateListingScreen
+          listing={selectedItem}
+          onBack={handleBackToProfile}
+          onSuccess={handleBackToProfile}
+        />
+      </FadeInView>
     );
   }
-  
+
   return (
-    <View style={styles.container}>
+    <FadeInView key="home" style={styles.container} slideFrom={0}>
       <StatusBar barStyle="light-content" />
-      <View style={styles.headerContainer}>
-        <Image 
-          source={require('../images/homepage_header.png')}
-          style={styles.headerImage}
-          resizeMode="stretch"
-        />
-        
-        {/* Purple extension when filters are active */}
-        {activeFilterCount > 0 && (
-          <View style={styles.headerExtension} />
-        )}
-        
-        {/* Placing header in overlay section */}
-        <View style={styles.headerOverlay}>
-          {/* Icon for Profile */}
-          <TouchableOpacity
-            style={styles.iconContainer}
-            onPress={handleProfilePress}
-          >
-            <Image 
-              source={require('../images/profile_icon.png')}
-              style={styles.profileIcon}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
-          
-          {/* Welcome Text */}
+
+      {/* Purple header: greeting + avatar, then search with built-in filter */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
           <View style={styles.welcomeContainer}>
-            <Text style={styles.welcomeText}>Welcome,</Text>
-            <Text style={styles.nameText}>{firstName || 'User'}</Text>
+            <Text style={styles.welcomeText}>Welcome back,</Text>
+            <Text style={styles.nameText}>{firstName || me?.firstName || 'Student'}</Text>
           </View>
-          
-        </View>
-        
-        {/* Search Bar with Filter Button */}
-        <View style={styles.searchRow}>
-          <View style={styles.searchBarContainer}>
-            <Image 
-              source={require('../images/search_icon.png')}
-              style={styles.searchIcon}
-              resizeMode="contain"
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search here"
-              placeholderTextColor="#999999"
-              value={searchText}
-              onChangeText={setSearchText}
-            />
-          </View>
-          
-          {/* Filter Button */}
-          <Pressable 
-            style={styles.filterButton}
-            onPress={() => setShowFilters(true)}
+          <PressableScale
+            style={styles.avatarButton}
+            scaleTo={0.92}
+            onPress={handleProfilePress}
+            accessibilityLabel="Open profile"
           >
-            <Text style={styles.filterIcon}>☰</Text>
+            {me?.avatarUrl ? (
+              <Image source={{ uri: me.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Ionicons name="person" size={20} color="#502E82" />
+            )}
+          </PressableScale>
+        </View>
+
+        {/* One search unit: text field + divider + filter entry. The filter
+            lives inside the bar so there's a single, unmistakable control. */}
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color="#9B91A8" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search books, furniture, tech..."
+            placeholderTextColor="#9B91A8"
+            value={searchText}
+            onChangeText={setSearchText}
+            returnKeyType="search"
+          />
+          {searchText.length > 0 && (
+            <Pressable
+              onPress={() => setSearchText('')}
+              hitSlop={8}
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={18} color="#C4BCD1" />
+            </Pressable>
+          )}
+          <View style={styles.searchDivider} />
+          <Pressable
+            style={styles.filterEntry}
+            onPress={() => setShowFilters(true)}
+            hitSlop={8}
+            accessibilityLabel="Open filters"
+          >
+            <Ionicons name="options-outline" size={22} color="#502E82" />
             {activeFilterCount > 0 && (
               <View style={styles.filterBadge}>
                 <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
@@ -320,124 +343,64 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
             )}
           </Pressable>
         </View>
-        
-        {/* Active Filters Display */}
-        {activeFilterCount > 0 && (
-          <View style={styles.filtersRow}>
-            <ActiveFilters
-              filters={filters}
-              onUpdateFilters={setFilters}
-              onResetFilters={resetFilters}
-            />
-          </View>
-        )}
       </View>
-      {/* Category Circles */}
-      <View style={[
-        styles.categoriesContainer,
-        activeFilterCount > 0 && styles.categoriesContainerWithFilters
-      ]}>
-        {/* Pink Circle - Main button */}
-        <TouchableOpacity style={styles.categoryCircleFirst} onPress={handlePinkCirclePress} activeOpacity={1}>
-          <Ionicons name="menu" size={28} color="#FFFFFF" />
-        </TouchableOpacity>
-        
-        {/* Animated sliding circles */}
-        <Animated.View style={[
-          styles.slidingCircle,
-          {
-            transform: [
-              {
-                translateX: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-72, 0],
-                }),
-              },
-            ],
-            opacity: slideAnim,
-          },
-        ]}>
-          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Books')}>
-            <Ionicons name="book-outline" size={28} color="#502E82" />
-          </TouchableOpacity>
-        </Animated.View>
-        
-        <Animated.View style={[
-          styles.slidingCircle,
-          {
-            transform: [
-              {
-                translateX: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-72, 0],
-                }),
-              },
-            ],
-            opacity: slideAnim,
-          },
-        ]}>
-          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Electronics')}>
-            <Ionicons name="laptop-outline" size={28} color="#502E82" />
-          </TouchableOpacity>
-        </Animated.View>
-        
-        <Animated.View style={[
-          styles.slidingCircle,
-          {
-            transform: [
-              {
-                translateX: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-72, 0],
-                }),
-              },
-            ],
-            opacity: slideAnim,
-          },
-        ]}>
-          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Furniture')}>
-            <MaterialCommunityIcons name="bed-outline" size={28} color="#502E82" />
-          </TouchableOpacity>
-        </Animated.View>
-        
-        <Animated.View style={[
-          styles.slidingCircle,
-          {
-            transform: [
-              {
-                translateX: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-72, 0],
-                }),
-              },
-            ],
-            opacity: slideAnim,
-          },
-        ]}>
-          <TouchableOpacity style={styles.categoryCircle} onPress={() => handleCategoryFilterPress('Clothing')}>
-            <Ionicons name="shirt-outline" size={28} color="#502E82" />
-          </TouchableOpacity>
-        </Animated.View>
+
+      {/* Category chips — always visible, labeled, selected state filled */}
+      <View style={styles.chipsWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsRow}
+        >
+          {CATEGORY_CHIPS.map(({ category, Icon, icon }) => {
+            const selected = filters.category === category;
+            return (
+              <PressableScale
+                key={category}
+                scaleTo={0.95}
+                style={[styles.chip, selected && styles.chipSelected]}
+                onPress={() => handleCategoryFilterPress(category)}
+                accessibilityLabel={`Filter by ${category}`}
+                accessibilityState={{ selected }}
+              >
+                <Icon name={icon} size={16} color={selected ? '#FFFFFF' : '#502E82'} />
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                  {category}
+                </Text>
+              </PressableScale>
+            );
+          })}
+        </ScrollView>
       </View>
-      
+
+      {/* Active condition/price filters (category state lives in the chips) */}
+      {modalFilterCount > 0 && (
+        <View style={styles.activeFiltersRow}>
+          <ActiveFilters
+            filters={filters}
+            onUpdateFilters={setFilters}
+            onResetFilters={resetFilters}
+            hideCategory
+          />
+        </View>
+      )}
+
       <ScrollView
-        style={[
-          styles.content,
-          activeFilterCount > 0 && styles.contentWithFilters
-        ]}
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Loading State */}
+        {/* Loading State — skeleton sections preview the feed layout */}
         {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#B39BD5" />
-            <Text style={styles.loadingText}>Loading listings...</Text>
+          <View>
+            <SkeletonFeedSection style={styles.section} />
+            <SkeletonFeedSection style={styles.section} />
           </View>
         ) : (
           <>
             {/* For You Section (doubles as search results) */}
         {filteredForYou.length > 0 && (
-          <View style={styles.section}>
+          <FadeInView style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{isSearching ? 'Results' : 'For You'}</Text>
             </View>
@@ -462,12 +425,12 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
               )}
               contentContainerStyle={styles.horizontalList}
             />
-          </View>
+          </FadeInView>
         )}
 
         {/* Trending Section */}
         {!isSearching && filteredTrending.length > 0 && (
-          <View style={styles.section}>
+          <FadeInView style={styles.section} delay={80}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Trending</Text>
             </View>
@@ -492,12 +455,12 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
               )}
               contentContainerStyle={styles.horizontalList}
             />
-          </View>
+          </FadeInView>
         )}
 
         {/* Recently Listed Section */}
         {!isSearching && filteredRecentlyListed.length > 0 && (
-          <View style={styles.section}>
+          <FadeInView style={styles.section} delay={160}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recently Listed</Text>
             </View>
@@ -522,12 +485,12 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
               )}
               contentContainerStyle={styles.horizontalList}
             />
-          </View>
+          </FadeInView>
         )}
-        
+
         {/* No results message */}
         {filteredForYou.length === 0 && (isSearching || (filteredTrending.length === 0 && filteredRecentlyListed.length === 0)) && (
-          <View style={styles.noResultsContainer}>
+          <FadeInView style={styles.noResultsContainer}>
             <Ionicons name="search-outline" size={64} color="#999999" />
             <Text style={styles.noResultsText}>No items found</Text>
             <Text style={styles.noResultsSubtext}>
@@ -536,11 +499,11 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
                 : 'Try adjusting your filters or search terms'}
             </Text>
             {!isSearching && forYouItems.length === 0 && trendingItems.length === 0 && recentItems.length === 0 && (
-              <TouchableOpacity style={styles.createFirstButton} onPress={handleSellPress}>
+              <PressableScale style={styles.createFirstButton} onPress={handleSellPress}>
                 <Text style={styles.createFirstButtonText}>Create Listing</Text>
-              </TouchableOpacity>
+              </PressableScale>
             )}
-          </View>
+          </FadeInView>
         )}
           </>
         )}
@@ -567,11 +530,11 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
           <Text style={styles.navLabel}>Saved</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.sellButton} onPress={handleSellPress}>
+        <PressableScale style={styles.sellButton} scaleTo={0.88} onPress={handleSellPress}>
           <View style={styles.addButtonCircle}>
             <Ionicons name="add" size={32} color="#FFFFFF" />
           </View>
-        </TouchableOpacity>
+        </PressableScale>
         
         <TouchableOpacity style={styles.navItem} onPress={handleMessagesPress}>
           <Ionicons name="chatbubble-ellipses-outline" size={28} color="#999999" />
@@ -583,214 +546,152 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
           <Text style={styles.navLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </FadeInView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ECECEC',
+    backgroundColor: '#F6F4FA',
   },
-  headerContainer: {
-    position: 'absolute',
-    top: -50,
-    left: 0,
-    right: 0,
-    width: '100%',
-    minHeight: 295,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    overflow: 'visible',
-    zIndex: 1,
-  },
-  headerImage: {
-    width: '100%',
-    height: 295,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    overflow: 'hidden',
-  },
-  headerExtension: {
-    position: 'absolute',
-    top: 185,
-    left: 0,
-    right: 0,
-    height: 150,
-    backgroundColor: '#502E82',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-  },
-  content: {
+  screenWrap: {
     flex: 1,
-    backgroundColor: '#ECECEC',
-    marginTop: 210,
-    paddingTop: 60,
-    paddingBottom: 100,
-    zIndex: 0,
   },
-  contentWithFilters: {
-    paddingTop: 150,
+  header: {
+    backgroundColor: '#502E82',
+    paddingTop: 64,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
-  headerOverlay: {
-    position: 'absolute',
-    top: 115,
-    left: 0,
-    right: 0,
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    zIndex: 2,
-  },
-  iconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    marginBottom: 18,
   },
   welcomeContainer: {
     flex: 1,
-    marginLeft: 15,
   },
   welcomeText: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Poppins_400Regular',
-    color: '#FFFFFF',
+    color: '#D8CCEC',
   },
   nameText: {
-    fontSize: 16,
+    fontSize: 22,
     fontFamily: 'Poppins_600SemiBold',
     color: '#FFFFFF',
     marginTop: -2,
   },
-  searchRow: {
-    position: 'absolute',
-    top: 185,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
+  avatarButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    gap: 12,
-    zIndex: 2,
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  searchBarContainer: {
-    flex: 1,
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 25,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    borderRadius: 16,
+    paddingLeft: 16,
+    paddingRight: 6,
+    height: 50,
   },
   searchIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 10,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Poppins_400Regular',
-    color: '#000000',
+    color: '#1F1B29',
+    paddingVertical: 0,
   },
-  filterButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'white',
-    justifyContent: 'center',
+  searchDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E8E3F1',
+    marginHorizontal: 10,
+  },
+  filterEntry: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F3EAFA',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-    position: 'relative',
-  },
-  filterIcon: {
-    fontSize: 22,
-    color: '#B39BD5',
+    justifyContent: 'center',
   },
   filterBadge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: '#B39BD5',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 6,
+    top: -4,
+    right: -4,
+    backgroundColor: '#502E82',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'white',
+    borderColor: '#FFFFFF',
   },
   filterBadgeText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontSize: 10,
     fontFamily: 'Poppins_600SemiBold',
   },
-  filtersRow: {
-    position: 'absolute',
-    top: 250,
-    left: 20,
-    right: 20,
+  chipsWrap: {
+    marginTop: 16,
   },
-  categoriesContainer: {
-    position: 'absolute',
-    top: 200,
-    left: 20,
-    right: 0,
+  chipsRow: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    zIndex: 3,
-  },
-  categoriesContainerWithFilters: {
-    top: 245,
-  },
-  slidingCircle: {
-    marginLeft: 0,
-  },
-  categoryCircleFirst: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#B39BD5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  categoryCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    gap: 6,
     backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    height: 38,
+    borderWidth: 1,
+    borderColor: '#E8E3F1',
+  },
+  chipSelected: {
+    backgroundColor: '#502E82',
+    borderColor: '#502E82',
+  },
+  chipText: {
+    fontSize: 13,
+    fontFamily: 'Poppins_500Medium',
+    color: '#4A4458',
+  },
+  chipTextSelected: {
+    color: '#FFFFFF',
+  },
+  activeFiltersRow: {
+    paddingHorizontal: 20,
+    marginTop: 12,
+  },
+  content: {
+    flex: 1,
+    marginTop: 16,
+  },
+  contentContainer: {
+    paddingBottom: 130,
   },
   bottomNav: {
     position: 'absolute',
@@ -881,18 +782,6 @@ const styles = StyleSheet.create({
     color: '#999999',
     marginTop: 8,
     textAlign: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 80,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: '#999999',
-    marginTop: 12,
   },
   createFirstButton: {
     marginTop: 20,

@@ -6,12 +6,13 @@ import {
   TouchableOpacity,
   StatusBar,
   FlatList,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import ListingCard from '../components/explore/ListingCard';
+import FadeInView from '../components/ui/FadeInView';
+import { SkeletonListingCard } from '../components/ui/Skeleton';
 
 export default function SavedScreen({ onBack, onItemPress }) {
   // Reactive: unsaving from here (or anywhere) drops the card immediately.
@@ -35,17 +36,22 @@ export default function SavedScreen({ onBack, onItemPress }) {
       </View>
 
       {isLoading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#B39BD5" />
+        // Skeleton grid previews the two-column saved layout while loading
+        <View style={styles.skeletonGrid}>
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} style={styles.skeletonCell}>
+              <SkeletonListingCard />
+            </View>
+          ))}
         </View>
       ) : saved.length === 0 ? (
-        <View style={styles.centered}>
+        <FadeInView style={styles.centered}>
           <Ionicons name="heart-outline" size={64} color="#CCCCCC" />
           <Text style={styles.emptyTitle}>No saved items yet</Text>
           <Text style={styles.emptySubtitle}>
             Tap the heart on any listing to save it here for later.
           </Text>
-        </View>
+        </FadeInView>
       ) : (
         <FlatList
           data={saved}
@@ -122,6 +128,17 @@ const styles = StyleSheet.create({
   list: {
     paddingVertical: 16,
     paddingHorizontal: 8,
+  },
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+  },
+  skeletonCell: {
+    width: '50%',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   row: {
     justifyContent: 'space-between',

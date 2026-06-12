@@ -16,6 +16,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
+import { Skeleton } from '../components/ui/Skeleton';
 
 const BUYER_QUICK_REPLIES = [
   "Is this still available?",
@@ -379,9 +380,12 @@ export default function ChatScreen({ chat, item, onBack }) {
           </View>
           <View style={styles.moreButton} />
         </View>
+        {/* Skeleton bubbles preview the conversation shape while loading */}
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={isBuyer ? "#2196F3" : "#4CAF50"} />
-          <Text style={styles.loadingText}>Loading messages...</Text>
+          <Skeleton width="55%" height={42} borderRadius={18} style={styles.skeletonBubbleLeft} />
+          <Skeleton width="42%" height={42} borderRadius={18} style={styles.skeletonBubbleRight} />
+          <Skeleton width="62%" height={42} borderRadius={18} style={styles.skeletonBubbleLeft} />
+          <Skeleton width="38%" height={42} borderRadius={18} style={styles.skeletonBubbleRight} />
         </View>
       </View>
     );
@@ -678,14 +682,17 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: '#999999',
+  skeletonBubbleLeft: {
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  skeletonBubbleRight: {
+    alignSelf: 'flex-end',
+    marginBottom: 12,
   },
   itemPreviewCard: {
     flexDirection: 'row',

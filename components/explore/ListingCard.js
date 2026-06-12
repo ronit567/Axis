@@ -1,5 +1,7 @@
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import PressableScale from '../ui/PressableScale';
 
 export default function ListingCard({ listing, onPress, isSaved, onToggleSave }) {
   // Get the first image URL or use placeholder (imageUrls is resolved
@@ -8,13 +10,33 @@ export default function ListingCard({ listing, onPress, isSaved, onToggleSave })
     ? { uri: listing.imageUrls[0] }
     : require('../../images/grey_circle.png');
 
+  // Remote images fade in once loaded so cards don't pop harshly.
+  const imageOpacity = useRef(new Animated.Value(0)).current;
+  const handleImageLoad = () => {
+    Animated.timing(imageOpacity, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const heartScale = useRef(new Animated.Value(1)).current;
+  const handleHeartPress = () => {
+    Animated.sequence([
+      Animated.spring(heartScale, { toValue: 1.35, speed: 60, bounciness: 12, useNativeDriver: true }),
+      Animated.spring(heartScale, { toValue: 1, speed: 40, bounciness: 8, useNativeDriver: true }),
+    ]).start();
+    onToggleSave();
+  };
+
   return (
-    <Pressable style={styles.card} onPress={onPress}>
+    <PressableScale style={styles.card} onPress={onPress}>
       <View style={styles.imagePlaceholder}>
-        <Image
+        <Animated.Image
           source={imageSource}
-          style={styles.placeholderImage}
+          style={[styles.placeholderImage, { opacity: imageOpacity }]}
           resizeMode="cover"
+          onLoad={handleImageLoad}
         />
         {/* Heart only appears when a save handler is wired in. Its own Pressable
             handles the tap, so hearting doesn't open the listing. */}
@@ -22,13 +44,15 @@ export default function ListingCard({ listing, onPress, isSaved, onToggleSave })
           <Pressable
             style={styles.heartButton}
             hitSlop={8}
-            onPress={onToggleSave}
+            onPress={handleHeartPress}
           >
-            <Ionicons
-              name={isSaved ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isSaved ? '#E0245E' : '#FFFFFF'}
-            />
+            <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+              <Ionicons
+                name={isSaved ? 'heart' : 'heart-outline'}
+                size={20}
+                color={isSaved ? '#E0245E' : '#FFFFFF'}
+              />
+            </Animated.View>
           </Pressable>
         )}
       </View>
@@ -40,7 +64,7 @@ export default function ListingCard({ listing, onPress, isSaved, onToggleSave })
           <Text style={styles.category}>{listing.category}</Text>
         </View>
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -61,7 +85,7 @@ const styles = StyleSheet.create({
   imagePlaceholder: {
     width: '100%',
     height: 140,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F0EDF5',
     justifyContent: 'center',
     alignItems: 'center',
   },

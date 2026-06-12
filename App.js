@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, Animated, ActivityIndicator, Platform } from 'react-native';
+import { View, Animated, Easing, Platform } from 'react-native';
 import { useFonts, HammersmithOne_400Regular } from '@expo-google-fonts/hammersmith-one';
 import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from '@expo-google-fonts/poppins';
 import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
@@ -21,6 +21,50 @@ const secureStorage = {
   setItem: SecureStore.setItemAsync,
   removeItem: SecureStore.deleteItemAsync,
 };
+
+// Branded boot screen: the logo breathes while fonts/auth resolve. No text —
+// custom fonts aren't guaranteed to be loaded yet at this point.
+function LoadingScreen() {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 850,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 850,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+      <Animated.Image
+        source={require('./images/logo.png')}
+        resizeMode="contain"
+        style={{
+          width: 110,
+          height: 110,
+          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }),
+          transform: [
+            { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.05] }) },
+          ],
+        }}
+      />
+    </View>
+  );
+}
 
 export default function App() {
   return (
@@ -220,12 +264,7 @@ function AppContent() {
   };
 
   if (!fontsLoaded || authLoading || isSigningUp) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#4b307d" />
-        <Text style={{ marginTop: 10, fontFamily: 'Poppins_400Regular', color: '#4b307d' }}>Loading...</Text>
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   const homeTranslateX = fadeAnim.interpolate({
