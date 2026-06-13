@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { SkeletonChatRow } from '../components/ui/Skeleton';
+import ScreenHeader from '../components/ui/ScreenHeader';
 
 const TABS = ['All', 'Buying', 'Selling'];
 
@@ -170,27 +171,12 @@ export default function MessagesListScreen({ onBack, onChatPress, embedded }) {
   );
 
   const header = (
-    <View style={styles.header}>
-      <View style={styles.headerRow}>
-        {embedded ? (
-          // Reached as a bottom-nav tab — no back arrow, the nav handles it.
-          <View style={styles.backButton} />
-        ) : (
-          <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel="Back">
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        )}
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Messages</Text>
-          {totalUnread > 0 && (
-            <View style={styles.headerBadge}>
-              <Text style={styles.headerBadgeText}>{totalUnread}</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.backButton} />
-      </View>
-
+    <ScreenHeader
+      title="Messages"
+      badgeCount={totalUnread}
+      embedded={embedded}
+      onBack={onBack}
+    >
       {/* Search */}
       <View style={styles.searchBar}>
         <Ionicons name="search" size={18} color="#9B91A8" />
@@ -207,7 +193,7 @@ export default function MessagesListScreen({ onBack, onChatPress, embedded }) {
           </Pressable>
         )}
       </View>
-    </View>
+    </ScreenHeader>
   );
 
   if (isLoading) {
@@ -270,50 +256,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-  },
-  header: {
-    backgroundColor: '#502E82',
-    paddingTop: 56,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
-  },
-  headerBadge: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerBadgeText: {
-    color: '#502E82',
-    fontSize: 11,
-    fontFamily: 'Poppins_600SemiBold',
   },
   searchBar: {
     flexDirection: 'row',

@@ -3,7 +3,6 @@ import {
   StyleSheet,
   View,
   Text,
-  TouchableOpacity,
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +10,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import ListingCard from '../components/explore/ListingCard';
 import FadeInView from '../components/ui/FadeInView';
+import ScreenHeader from '../components/ui/ScreenHeader';
 import { SkeletonListingCard } from '../components/ui/Skeleton';
 
 export default function SavedScreen({ onBack, onItemPress, embedded }) {
@@ -19,23 +19,24 @@ export default function SavedScreen({ onBack, onItemPress, embedded }) {
   const toggleSave = useMutation(api.saved.toggleSave);
 
   const isLoading = saved === undefined;
+  const savedCount = saved?.length ?? 0;
+  // The caption gives the purple band a second line of content so it reads as a
+  // header rather than a bare strip; empty state nudges how to fill it.
+  const caption =
+    !isLoading && savedCount === 0
+      ? 'Tap the heart on a listing to save it here'
+      : "Things you're keeping an eye on";
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        {embedded ? (
-          // Reached as a bottom-nav tab — no back arrow, the nav handles it.
-          <View style={styles.backButton} />
-        ) : (
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-        )}
-        <Text style={styles.headerTitle}>Saved</Text>
-        {/* Spacer to keep the title centered against the back button */}
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeader
+        title="Saved"
+        embedded={embedded}
+        onBack={onBack}
+        badgeCount={savedCount}
+      >
+        <Text style={styles.headerCaption}>{caption}</Text>
+      </ScreenHeader>
 
       {isLoading ? (
         // Skeleton grid previews the two-column saved layout while loading
@@ -66,7 +67,7 @@ export default function SavedScreen({ onBack, onItemPress, embedded }) {
             <View style={styles.cardWrap}>
               <ListingCard
                 listing={item}
-                onPress={() => onItemPress && onItemPress(item)}
+                onPress={(origin) => onItemPress && onItemPress(item, origin)}
                 isSaved
                 onToggleSave={() => toggleSave({ listingId: item._id })}
               />
@@ -83,29 +84,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
+  headerCaption: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#D8CCEC',
   },
   centered: {
     flex: 1,
