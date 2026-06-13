@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,6 +9,11 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Animated,
+  Easing,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -16,18 +21,51 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Skeleton } from '../components/ui/Skeleton';
 
-export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemPress, embedded }) {
+// The white sheet should always reach past the fold so the page reads as one
+// surface rising over the banner — no purple gap underneath a short list.
+const SHEET_MIN_HEIGHT = Dimensions.get('window').height - 200;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOpenSettings, embedded }) {
   const profile = useQuery(api.users.current);
+
+  // One ref per listing row so a tap can measure its rect and let item details
+  // grow out of it (container transform), matching the home/saved feeds.
+  const rowRefs = useRef({});
+  const openListing = (listing) => {
+    if (!onItemPress) return;
+    const node = rowRefs.current[listing._id];
+    if (node && typeof node.measureInWindow === 'function') {
+      node.measureInWindow((x, y, width, height) =>
+        onItemPress(listing, { x, y, width, height })
+      );
+    } else {
+      onItemPress(listing, null);
+    }
+  };
   const myListings = useQuery(api.listings.myListings);
   const updateProfile = useMutation(api.users.updateProfile);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const markSold = useMutation(api.listings.markSold);
   const removeListing = useMutation(api.listings.remove);
 
-  const [isEditing, setIsEditing] = useState(false);
+  const [editMounted, setEditMounted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [form, setForm] = useState(null);
+
+  // 0 = profile, 1 = edit. Tapping Edit Profile slides the edit layer in from
+  // the right (and back out) like the app's other drill-ins.
+  const editAnim = useRef(new Animated.Value(0)).current;
+
+  // Parallax: the banner drifts up at half speed as the content scrolls over
+  // it, so the page lifts off the header rather than sliding flatly.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const bannerShift = scrollY.interpolate({
+    inputRange: [0, 220],
+    outputRange: [0, 70],
+    extrapolate: 'clamp',
+  });
 
   const startEditing = () => {
     setForm({
@@ -37,7 +75,25 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
       yearOfStudy: profile?.yearOfStudy ?? '',
       bio: profile?.bio ?? '',
     });
-    setIsEditing(true);
+    setEditMounted(true);
+    Animated.timing(editAnim, {
+      toValue: 1,
+      duration: 340,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Slide back out to the right, then unmount the edit layer once it's gone.
+  const closeEdit = () => {
+    Animated.timing(editAnim, {
+      toValue: 0,
+      duration: 260,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setEditMounted(false);
+    });
   };
 
   const saveProfile = async () => {
@@ -54,7 +110,7 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
         yearOfStudy: form.yearOfStudy.trim(),
         bio: form.bio.trim(),
       });
-      setIsEditing(false);
+      closeEdit();
     } catch (error) {
       console.error('Profile save error:', error);
       Alert.alert('Error', 'Failed to save your profile. Please try again.');
@@ -117,22 +173,16 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
     ]);
   };
 
-  const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: onLogout },
-    ]);
-  };
-
   if (profile === undefined) {
-    // Skeleton previews the identity block while the profile loads
+    // Translucent placeholders preview the identity block on the purple hero
+    // while the profile loads.
     return (
       <View style={styles.container}>
-        <View style={styles.skeletonIdentity}>
-          <Skeleton width={96} height={96} borderRadius={48} />
-          <Skeleton width={160} height={18} style={styles.skeletonLine} />
-          <Skeleton width={200} height={13} style={styles.skeletonLine} />
-          <Skeleton width={130} height={13} style={styles.skeletonLine} />
+        <View style={styles.banner}>
+          <View style={styles.bannerTopRow} />
+          <View style={[styles.avatar, styles.avatarSkeleton]} />
+          <View style={styles.heroSkelLineWide} />
+          <View style={styles.heroSkelLine} />
         </View>
       </View>
     );
@@ -140,69 +190,78 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
 
   const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'Student';
 
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        {embedded ? (
-          // Reached as a bottom-nav tab — no back arrow, the nav handles it.
-          <View style={styles.backButton} />
-        ) : (
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-        )}
-        <Text style={styles.headerTitle}>Profile</Text>
-        {isEditing ? (
-          <TouchableOpacity style={styles.headerAction} onPress={() => setIsEditing(false)}>
-            <Text style={styles.headerActionText}>Cancel</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.headerAction} onPress={startEditing}>
-            <Text style={styles.headerActionText}>Edit</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+  // Banner stats — give the purple something to say beyond the name.
+  const listingCount = myListings?.length ?? 0;
+  const soldCount = myListings?.filter((l) => l.status === 'sold').length ?? 0;
+  const activeCount = listingCount - soldCount;
+  const editName =
+    `${form?.firstName || ''} ${form?.lastName || ''}`.trim() || 'Student';
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Avatar + identity */}
-        <View style={styles.identitySection}>
-          <TouchableOpacity style={styles.avatarContainer} onPress={changeAvatar} disabled={isUploadingAvatar}>
-            {profile?.avatarUrl ? (
-              <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Ionicons name="person" size={44} color="#B39BD5" />
-              </View>
-            )}
-            <View style={styles.avatarBadge}>
-              {isUploadingAvatar ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+  // Tapping Edit Profile slides this layout in from the right over the profile,
+  // and back out on Cancel/Save — the same page-slide as the app's drill-ins. A
+  // pinned, compact banner keeps the photo + Cancel reachable; form scrolls under.
+  const editSlide = editAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SCREEN_WIDTH, 0],
+  });
+  const editLayer = editMounted ? (
+    <Animated.View
+      style={[
+        StyleSheet.absoluteFill,
+        styles.editContainer,
+        { transform: [{ translateX: editSlide }] },
+      ]}
+    >
+        <View style={styles.editBanner}>
+          <View style={styles.bannerTopRow}>
+            <View style={styles.bannerSpacer} />
+            <TouchableOpacity
+              onPress={closeEdit}
+              hitSlop={8}
+              accessibilityLabel="Cancel"
+            >
+              <Text style={styles.bannerAction}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.editIdentityRow}>
+            <TouchableOpacity
+              style={styles.avatarContainerSm}
+              onPress={changeAvatar}
+              disabled={isUploadingAvatar}
+            >
+              {profile?.avatarUrl ? (
+                <Image source={{ uri: profile.avatarUrl }} style={styles.avatarSm} />
               ) : (
-                <Ionicons name="camera" size={14} color="#FFFFFF" />
+                <View style={[styles.avatarSm, styles.avatarPlaceholder]}>
+                  <Ionicons name="person" size={30} color="#B39BD5" />
+                </View>
               )}
+              <View style={styles.avatarBadgeSm}>
+                {isUploadingAvatar ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="camera" size={12} color="#FFFFFF" />
+                )}
+              </View>
+            </TouchableOpacity>
+            <View style={styles.editIdentityInfo}>
+              <Text style={styles.editName} numberOfLines={1}>{editName}</Text>
+              <Text style={styles.editEmail} numberOfLines={1}>{profile?.email}</Text>
+              <Text style={styles.editHint}>Tap the photo to change it</Text>
             </View>
-          </TouchableOpacity>
-
-          {!isEditing && (
-            <>
-              <Text style={styles.name}>{fullName}</Text>
-              <Text style={styles.email}>{profile?.email}</Text>
-              {(profile?.program || profile?.yearOfStudy) && (
-                <Text style={styles.programLine}>
-                  {[profile?.program, profile?.yearOfStudy && `Year ${profile.yearOfStudy}`]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Text>
-              )}
-              {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
-            </>
-          )}
+          </View>
         </View>
 
-        {/* Edit form */}
-        {isEditing && (
-          <View style={styles.editSection}>
+        <KeyboardAvoidingView
+          style={styles.editFormFlex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
+            style={styles.editFormFlex}
+            contentContainerStyle={styles.editScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
                 <Text style={styles.label}>First Name *</Text>
@@ -268,9 +327,101 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
                 <Text style={styles.saveButtonText}>Save Changes</Text>
               )}
             </TouchableOpacity>
-          </View>
-        )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+    </Animated.View>
+  ) : null;
 
+  return (
+    <View style={styles.root}>
+    <View style={styles.container}>
+      <Animated.ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
+      >
+        {/* Purple banner: identity + stats on the brand colour, rounded bottom
+            like every other header. It drifts up at half speed as you scroll. */}
+        <Animated.View
+          style={[
+            styles.banner,
+            { transform: [{ translateY: bannerShift }] },
+          ]}
+        >
+          <View style={styles.bannerTopRow}>
+            {!embedded && onBack && (
+              <TouchableOpacity
+                onPress={onBack}
+                style={styles.bannerBack}
+                hitSlop={8}
+                accessibilityLabel="Back"
+              >
+                <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+            <View style={styles.bannerSpacer} />
+            <TouchableOpacity
+              onPress={() => onOpenSettings && onOpenSettings()}
+              hitSlop={8}
+              accessibilityLabel="Settings"
+            >
+              <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          {/* View mode: the photo is just a photo — editing it lives in Edit */}
+          <View style={styles.avatarContainer}>
+            {profile?.avatarUrl ? (
+              <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Ionicons name="person" size={44} color="#B39BD5" />
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.name}>{fullName}</Text>
+          <Text style={styles.email}>{profile?.email}</Text>
+          {(profile?.program || profile?.yearOfStudy) && (
+            <Text style={styles.programLine}>
+              {[profile?.program, profile?.yearOfStudy && `Year ${profile.yearOfStudy}`]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+          )}
+          {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+
+          <View style={styles.statsRow}>
+                <View style={styles.stat}>
+                  <Text style={styles.statNumber}>{listingCount}</Text>
+                  <Text style={styles.statLabel}>Listings</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.stat}>
+                  <Text style={styles.statNumber}>{activeCount}</Text>
+                  <Text style={styles.statLabel}>Active</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.stat}>
+                  <Text style={styles.statNumber}>{soldCount}</Text>
+                  <Text style={styles.statLabel}>Sold</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.editProfileButton} onPress={startEditing}>
+                <Ionicons name="create-outline" size={18} color="#502E82" />
+                <Text style={styles.editProfileText}>Edit Profile</Text>
+              </TouchableOpacity>
+        </Animated.View>
+
+        {/* White sheet: rounded lip overlaps the banner so it reads as a panel
+            rising over the purple as you scroll. */}
+        <View style={styles.sheet}>
         {/* My Listings */}
         <View style={styles.listingsSection}>
           <Text style={styles.sectionTitle}>My Listings</Text>
@@ -285,8 +436,9 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
             myListings.map((listing) => (
               <View key={listing._id} style={styles.listingRow}>
                 <TouchableOpacity
+                  ref={(node) => { rowRefs.current[listing._id] = node; }}
                   style={styles.listingMain}
-                  onPress={() => onItemPress && onItemPress(listing)}
+                  onPress={() => openListing(listing)}
                 >
                   <Image
                     source={
@@ -346,27 +498,102 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
             ))
           )}
         </View>
-
-        {/* Logout */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#D32F2F" />
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 60 }} />
-      </ScrollView>
+        </View>
+      </Animated.ScrollView>
+    </View>
+      {editLayer}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   container: {
+    flex: 1,
+    // White base so over-scrolling (top or bottom) shows white, never a purple
+    // gap; the purple header carries its own rounded-bottom curve.
+    backgroundColor: '#FFFFFF',
+  },
+  scroll: {
+    flex: 1,
+  },
+  // ---- Edit mode: pinned compact header + scrolling form ----
+  editContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  skeletonIdentity: {
+  editBanner: {
+    backgroundColor: '#502E82',
+    paddingTop: 56,
+    paddingBottom: 22,
+    paddingHorizontal: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  editIdentityRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 140,
+    marginTop: 4,
+  },
+  avatarContainerSm: {
+    position: 'relative',
+    marginRight: 16,
+  },
+  avatarSm: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+  },
+  avatarBadgeSm: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#B39BD5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#502E82',
+  },
+  editIdentityInfo: {
+    flex: 1,
+  },
+  editName: {
+    fontSize: 18,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#FFFFFF',
+  },
+  editEmail: {
+    fontSize: 13,
+    fontFamily: 'Poppins_400Regular',
+    color: '#C9B8E4',
+    marginTop: 1,
+  },
+  editHint: {
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
+    color: '#E2D6F5',
+    marginTop: 5,
+  },
+  editFormFlex: {
+    flex: 1,
+  },
+  editScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 120,
+  },
+  scrollContent: {
+    // Lets the sheet's tall minHeight push the page past the fold for scroll
+    // room without leaving purple showing underneath.
+    flexGrow: 1,
   },
   skeletonLine: {
     marginTop: 14,
@@ -374,59 +601,103 @@ const styles = StyleSheet.create({
   skeletonListings: {
     marginTop: 4,
   },
-  header: {
+  banner: {
+    backgroundColor: '#502E82',
+    paddingTop: 56,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    // Curve lives on the purple here too, matching every other header
+    // (Saved / Messages / Settings / the edit banner).
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  bannerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    alignSelf: 'stretch',
+    minHeight: 24,
+    marginBottom: 6,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
+  bannerBack: {
+    marginRight: 12,
+    marginLeft: -4,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
-  },
-  headerAction: {
-    minWidth: 40,
-    alignItems: 'flex-end',
-  },
-  headerActionText: {
-    fontSize: 15,
-    fontFamily: 'Poppins_500Medium',
-    color: '#502E82',
-  },
-  content: {
+  bannerSpacer: {
     flex: 1,
   },
-  identitySection: {
+  bannerAction: {
+    fontSize: 15,
+    fontFamily: 'Poppins_500Medium',
+    color: '#FFFFFF',
+  },
+  statsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 24,
+    justifyContent: 'center',
+    marginTop: 18,
+  },
+  stat: {
+    alignItems: 'center',
+    paddingHorizontal: 22,
+  },
+  statNumber: {
+    fontSize: 18,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#FFFFFF',
+  },
+  statLabel: {
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
+    color: '#C9B8E4',
+    marginTop: 1,
+  },
+  statDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+  },
+  editProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingVertical: 11,
     paddingHorizontal: 24,
+    marginTop: 20,
+  },
+  editProfileText: {
+    fontSize: 14,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#502E82',
+  },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    paddingTop: 4,
+    paddingBottom: 100,
+    minHeight: SHEET_MIN_HEIGHT,
   },
   avatarContainer: {
     position: 'relative',
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#F5F5F5',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   avatarPlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F3EAFA',
+  },
+  avatarSkeleton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderColor: 'rgba(255, 255, 255, 0.22)',
   },
   avatarBadge: {
     position: 'absolute',
@@ -435,41 +706,51 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#502E82',
+    backgroundColor: '#B39BD5',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: '#502E82',
   },
   name: {
     fontSize: 20,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
+    color: '#FFFFFF',
     marginTop: 12,
   },
   email: {
     fontSize: 14,
     fontFamily: 'Poppins_400Regular',
-    color: '#999999',
+    color: '#C9B8E4',
     marginTop: 2,
   },
   programLine: {
     fontSize: 14,
     fontFamily: 'Poppins_500Medium',
-    color: '#502E82',
+    color: '#E2D6F5',
     marginTop: 6,
   },
   bio: {
     fontSize: 14,
     fontFamily: 'Poppins_400Regular',
-    color: '#666666',
+    color: '#D8CCEC',
     marginTop: 10,
     textAlign: 'center',
     lineHeight: 20,
   },
-  editSection: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+  heroSkelLineWide: {
+    width: 150,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    marginTop: 16,
+  },
+  heroSkelLine: {
+    width: 200,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    marginTop: 12,
   },
   fieldRow: {
     flexDirection: 'row',
@@ -605,23 +886,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 28,
-    marginHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-    backgroundColor: '#FFF5F5',
-  },
-  logoutText: {
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#D32F2F',
-    marginLeft: 8,
   },
 });
