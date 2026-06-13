@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, forwardRef } from 'react';
 import { Animated, Pressable } from 'react-native';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -6,9 +6,13 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 /**
  * Pressable with a springy scale-down on touch — makes cards and buttons
  * feel tactile instead of just dimming. A single animated element, so the
- * passed style keeps its layout semantics (flex, margins, shadows).
+ * passed style keeps its layout semantics (flex, margins, shadows). The ref
+ * reaches the underlying view (e.g. for measureInWindow).
  */
-export default function PressableScale({ children, style, scaleTo = 0.96, ...rest }) {
+const PressableScale = forwardRef(function PressableScale(
+  { children, style, scaleTo = 0.96, ...rest },
+  ref
+) {
   const scale = useRef(new Animated.Value(1)).current;
 
   const animateTo = (toValue) =>
@@ -21,6 +25,7 @@ export default function PressableScale({ children, style, scaleTo = 0.96, ...res
 
   return (
     <AnimatedPressable
+      ref={ref}
       onPressIn={() => animateTo(scaleTo)}
       onPressOut={() => animateTo(1)}
       style={[style, { transform: [{ scale }] }]}
@@ -29,4 +34,6 @@ export default function PressableScale({ children, style, scaleTo = 0.96, ...res
       {children}
     </AnimatedPressable>
   );
-}
+});
+
+export default PressableScale;

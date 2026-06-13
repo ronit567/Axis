@@ -7,7 +7,7 @@ import { SkeletonChatRow } from '../components/ui/Skeleton';
 
 const TABS = ['All', 'Buying', 'Selling'];
 
-export default function MessagesListScreen({ onBack, onChatPress }) {
+export default function MessagesListScreen({ onBack, onChatPress, embedded }) {
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState('All');
 
@@ -172,9 +172,14 @@ export default function MessagesListScreen({ onBack, onChatPress }) {
   const header = (
     <View style={styles.header}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel="Back">
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        {embedded ? (
+          // Reached as a bottom-nav tab — no back arrow, the nav handles it.
+          <View style={styles.backButton} />
+        ) : (
+          <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel="Back">
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Messages</Text>
           {totalUnread > 0 && (

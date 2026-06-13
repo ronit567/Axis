@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StatusBar,
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +13,7 @@ import ListingCard from '../components/explore/ListingCard';
 import FadeInView from '../components/ui/FadeInView';
 import { SkeletonListingCard } from '../components/ui/Skeleton';
 
-export default function SavedScreen({ onBack, onItemPress }) {
+export default function SavedScreen({ onBack, onItemPress, embedded }) {
   // Reactive: unsaving from here (or anywhere) drops the card immediately.
   const saved = useQuery(api.saved.listSaved);
   const toggleSave = useMutation(api.saved.toggleSave);
@@ -23,13 +22,16 @@ export default function SavedScreen({ onBack, onItemPress }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
+        {embedded ? (
+          // Reached as a bottom-nav tab — no back arrow, the nav handles it.
+          <View style={styles.backButton} />
+        ) : (
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+        )}
         <Text style={styles.headerTitle}>Saved</Text>
         {/* Spacer to keep the title centered against the back button */}
         <View style={styles.backButton} />

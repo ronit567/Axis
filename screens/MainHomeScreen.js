@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Pressable } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useMutation } from 'convex/react';
@@ -8,6 +8,7 @@ import FilterModal from '../components/explore/FilterModal';
 import ActiveFilters from '../components/explore/ActiveFilters';
 import { DEFAULT_FILTERS, PRICE_CAP } from '../components/explore/filters';
 import FadeInView from '../components/ui/FadeInView';
+import ScreenTransition from '../components/ui/ScreenTransition';
 import PressableScale from '../components/ui/PressableScale';
 import { SkeletonFeedSection } from '../components/ui/Skeleton';
 import MessagesListScreen from './MessagesListScreen';
@@ -16,6 +17,11 @@ import ChatScreen from './ChatScreen';
 import CreateListingScreen from './CreateListingScreen';
 import ProfileScreen from './ProfileScreen';
 import SavedScreen from './SavedScreen';
+
+// Peer destinations that share the persistent bottom nav and stay mounted.
+const TAB_SCREENS = ['home', 'saved', 'messagesList', 'profile'];
+// Drill-ins / compose flows that render full-screen over the tab shell.
+const OVERLAY_SCREENS = ['itemDetails', 'chat', 'createListing', 'editListing'];
 
 // Always-visible labeled category chips — replaces the old hamburger circle
 // that hid icon-only category buttons behind a tap.
@@ -41,6 +47,24 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const [currentScreen, setCurrentScreen] = useState('home');
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
+
+  // Transition type for the next screen change, per platform conventions:
+  // 'tab' for bottom-nav peers (fade in place), 'push'/'pop' for drill-ins
+  // (slide from right / left), 'modal' for compose flows (slide up from
+  // bottom), 'none' for the initial mount.
+  const navTransition = useRef('none');
+  const go = (screen, transition = 'none') => {
+    navTransition.current = transition;
+    setCurrentScreen(screen);
+  };
+
+  // Remembers the last tab so the shell keeps showing it underneath while an
+  // overlay (item details, chat, compose) is open on top.
+  const lastTabRef = useRef('home');
+
+  // Which screen item details was opened from, so back returns there
+  // (home, saved, or profile) instead of always landing on home.
+  const [detailsSource, setDetailsSource] = useState('home');
 
   // Debounced server-side search — the feed query uses the full-text index
   // on listing titles, so results aren't limited to the first 50 rows.
@@ -130,14 +154,21 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   
   // Navigation handlers
   const handleItemPress = (item) => {
+    // Opening details from details (similar items) keeps the original source
+    if (currentScreen !== 'itemDetails') {
+      setDetailsSource(currentScreen);
+    }
     setSelectedItem(item);
-    setCurrentScreen('itemDetails');
+    go('itemDetails', 'push');
   };
-  
-  const handleMessagesPress = () => {
-    setCurrentScreen('messagesList');
+
+  // Back from details pops to wherever it was opened from
+  const handleCloseDetails = () => {
+    go(detailsSource, 'pop');
+    setSelectedItem(null);
+    setSelectedChat(null);
   };
-  
+
   const handleChatWithSeller = (item) => {
     setSelectedItem(item);
     // Seller summary comes hydrated on every Convex listing
@@ -150,142 +181,114 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
       sellerId: item.sellerId,
       listingId: item._id,
     });
-    setCurrentScreen('chat');
+    go('chat', 'push');
   };
-  
+
   const handleChatPress = (chat) => {
     setSelectedChat(chat);
-    setCurrentScreen('chat');
+    go('chat', 'push');
   };
-  
-  const handleBackToHome = () => {
-    setCurrentScreen('home');
+
+  // Dismiss an overlay back to the home tab (e.g. closing the compose flow);
+  // chat opened from a listing also returns home.
+  const homeAsTab = () => {
+    go('home', 'tab');
     setSelectedItem(null);
     setSelectedChat(null);
   };
-  
+
+  const homeAsPop = () => {
+    go('home', 'pop');
+    setSelectedItem(null);
+    setSelectedChat(null);
+  };
+
   const handleBackToMessages = () => {
-    setCurrentScreen('messagesList');
+    go('messagesList', 'pop');
     setSelectedChat(null);
   };
 
   const handleSellPress = () => {
-    setCurrentScreen('createListing');
+    go('createListing', 'modal');
   };
 
   const handleProfilePress = () => {
-    setCurrentScreen('profile');
-  };
-
-  const handleSavedPress = () => {
-    setCurrentScreen('saved');
+    go('profile');
   };
 
   const handleEditListing = (listing) => {
     setSelectedItem(listing);
-    setCurrentScreen('editListing');
+    go('editListing', 'modal');
   };
 
   const handleBackToProfile = () => {
-    setCurrentScreen('profile');
+    // Dismissing the edit-listing modal: profile reappears in place
+    go('profile', 'tab');
     setSelectedItem(null);
   };
 
   const handleListingCreated = () => {
-    // Go back to home — the reactive feed query picks up the new listing
-    setCurrentScreen('home');
+    // Dismissing the sell modal — the reactive feed picks up the new listing
+    homeAsTab();
   };
   
-  // Render different screens based on navigation state. Each is wrapped in a
-  // keyed FadeInView so screen swaps animate in instead of hard-cutting.
-  if (currentScreen === 'messagesList') {
-    return (
-      <FadeInView key="messagesList" style={styles.screenWrap}>
-        <MessagesListScreen
-          onBack={handleBackToHome}
-          onChatPress={handleChatPress}
-        />
-      </FadeInView>
-    );
-  }
+  // Tab peers (home, saved, messages, profile) share one persistent bottom
+  // nav and stay mounted, so switching between them is instant — no remount,
+  // no skeleton re-flash, no lost scroll. Drill-ins and compose flows render
+  // as overlays *on top* of the shell (covering the nav).
+  const isTab = TAB_SCREENS.includes(currentScreen);
+  if (isTab) lastTabRef.current = currentScreen;
+  const activeTab = isTab ? currentScreen : lastTabRef.current;
 
+  // The active overlay, slid in over the live tab shell. Opening animates
+  // (push from the right / modal up); closing just unmounts to reveal the
+  // tab already sitting underneath — no background flash, nothing to remount.
+  let overlay = null;
   if (currentScreen === 'itemDetails' && selectedItem) {
-    return (
-      <FadeInView key="itemDetails" style={styles.screenWrap}>
+    overlay = (
+      <ScreenTransition key="itemDetails" type={navTransition.current} style={styles.overlay}>
         <ItemDetailsScreen
           item={selectedItem}
-          onBack={handleBackToHome}
+          onBack={handleCloseDetails}
           onChatWithSeller={handleChatWithSeller}
           onItemPress={handleItemPress}
           onEditListing={handleEditListing}
         />
-      </FadeInView>
+      </ScreenTransition>
     );
-  }
-
-  if (currentScreen === 'chat') {
-    return (
-      <FadeInView key="chat" style={styles.screenWrap}>
+  } else if (currentScreen === 'chat') {
+    overlay = (
+      <ScreenTransition key="chat" type={navTransition.current} style={styles.overlay}>
         <ChatScreen
           chat={selectedChat}
           item={selectedItem}
-          onBack={selectedItem ? handleBackToHome : handleBackToMessages}
+          onBack={selectedItem ? homeAsPop : handleBackToMessages}
         />
-      </FadeInView>
+      </ScreenTransition>
     );
-  }
-
-  if (currentScreen === 'createListing') {
-    return (
-      <FadeInView key="createListing" style={styles.screenWrap}>
+  } else if (currentScreen === 'createListing') {
+    overlay = (
+      <ScreenTransition key="createListing" type={navTransition.current} style={styles.overlay}>
         <CreateListingScreen
-          onBack={handleBackToHome}
+          onBack={homeAsTab}
           onSuccess={handleListingCreated}
         />
-      </FadeInView>
+      </ScreenTransition>
     );
-  }
-
-  if (currentScreen === 'profile') {
-    return (
-      <FadeInView key="profile" style={styles.screenWrap}>
-        <ProfileScreen
-          onBack={handleBackToHome}
-          onLogout={onLogout}
-          onItemPress={handleItemPress}
-          onEditListing={handleEditListing}
-        />
-      </FadeInView>
-    );
-  }
-
-  if (currentScreen === 'saved') {
-    return (
-      <FadeInView key="saved" style={styles.screenWrap}>
-        <SavedScreen
-          onBack={handleBackToHome}
-          onItemPress={handleItemPress}
-        />
-      </FadeInView>
-    );
-  }
-
-  if (currentScreen === 'editListing' && selectedItem) {
-    return (
-      <FadeInView key="editListing" style={styles.screenWrap}>
+  } else if (currentScreen === 'editListing' && selectedItem) {
+    overlay = (
+      <ScreenTransition key="editListing" type={navTransition.current} style={styles.overlay}>
         <CreateListingScreen
           listing={selectedItem}
           onBack={handleBackToProfile}
           onSuccess={handleBackToProfile}
         />
-      </FadeInView>
+      </ScreenTransition>
     );
   }
 
-  return (
-    <FadeInView key="home" style={styles.container} slideFrom={0}>
-      <StatusBar barStyle="light-content" />
-
+  const renderHome = () => (
+    <View style={styles.container}>
       {/* Purple header: greeting + avatar, then search with built-in filter */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
@@ -517,36 +520,68 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         onUpdateFilters={setFilters}
         onResetFilters={resetFilters}
       />
-      
-      {/* Bottom Navigation Bar */}
+    </View>
+  );
+
+  // One bottom-nav item; the active tab gets the filled icon and brand colour.
+  const renderNavItem = (key, label, activeIcon, inactiveIcon) => {
+    const active = activeTab === key;
+    return (
+      <TouchableOpacity
+        style={styles.navItem}
+        onPress={() => go(key)}
+        accessibilityRole="tab"
+        accessibilityLabel={label}
+        accessibilityState={{ selected: active }}
+      >
+        <Ionicons name={active ? activeIcon : inactiveIcon} size={26} color={active ? '#502E82' : '#999999'} />
+        <Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <View style={styles.shell}>
+      {/* Status bar matches the active tab's header colour */}
+      <StatusBar barStyle={activeTab === 'home' || activeTab === 'messagesList' ? 'light-content' : 'dark-content'} />
+
+      {/* All four tab pages stay mounted; only the active one is visible, so
+          switching tabs is instant and keeps state, scroll, and live data. */}
+      <View style={styles.tabBody}>
+        <View style={[styles.tabPage, activeTab !== 'home' && styles.tabPageHidden]}>
+          {renderHome()}
+        </View>
+        <View style={[styles.tabPage, activeTab !== 'saved' && styles.tabPageHidden]}>
+          <SavedScreen embedded onItemPress={handleItemPress} />
+        </View>
+        <View style={[styles.tabPage, activeTab !== 'messagesList' && styles.tabPageHidden]}>
+          <MessagesListScreen embedded onBack={homeAsTab} onChatPress={handleChatPress} />
+        </View>
+        <View style={[styles.tabPage, activeTab !== 'profile' && styles.tabPageHidden]}>
+          <ProfileScreen
+            embedded
+            onLogout={onLogout}
+            onItemPress={handleItemPress}
+            onEditListing={handleEditListing}
+          />
+        </View>
+      </View>
+
+      {/* Persistent bottom navigation — stays put across every tab */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="home" size={28} color="#B39BD5" />
-          <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navItem} onPress={handleSavedPress}>
-          <Ionicons name="heart-outline" size={28} color="#999999" />
-          <Text style={styles.navLabel}>Saved</Text>
-        </TouchableOpacity>
-
+        {renderNavItem('home', 'Home', 'home', 'home-outline')}
+        {renderNavItem('saved', 'Saved', 'heart', 'heart-outline')}
         <PressableScale style={styles.sellButton} scaleTo={0.88} onPress={handleSellPress}>
           <View style={styles.addButtonCircle}>
             <Ionicons name="add" size={32} color="#FFFFFF" />
           </View>
         </PressableScale>
-        
-        <TouchableOpacity style={styles.navItem} onPress={handleMessagesPress}>
-          <Ionicons name="chatbubble-ellipses-outline" size={28} color="#999999" />
-          <Text style={styles.navLabel}>Messages</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} onPress={handleProfilePress}>
-          <Ionicons name="person-outline" size={28} color="#999999" />
-          <Text style={styles.navLabel}>Profile</Text>
-        </TouchableOpacity>
+        {renderNavItem('messagesList', 'Messages', 'chatbubble-ellipses', 'chatbubble-ellipses-outline')}
+        {renderNavItem('profile', 'Profile', 'person', 'person-outline')}
       </View>
-    </FadeInView>
+
+      {overlay}
+    </View>
   );
 }
 
@@ -557,6 +592,28 @@ const styles = StyleSheet.create({
   },
   screenWrap: {
     flex: 1,
+  },
+  // Persistent shell: tab body stacked above the always-visible bottom nav.
+  shell: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  tabBody: {
+    flex: 1,
+  },
+  tabPage: {
+    flex: 1,
+  },
+  tabPageHidden: {
+    display: 'none',
+  },
+  // Drill-ins / compose flows cover the whole shell, nav included.
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   header: {
     backgroundColor: '#502E82',
@@ -691,20 +748,18 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   contentContainer: {
-    paddingBottom: 130,
+    paddingBottom: 24,
   },
   bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 10,
-    paddingBottom: 20,
+    paddingTop: 10,
+    paddingBottom: 28,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#F0ECF7',
   },
   navItem: {
     alignItems: 'center',
@@ -718,7 +773,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   navLabelActive: {
-    color: '#B39BD5',
+    color: '#502E82',
+    fontFamily: 'Poppins_500Medium',
   },
   sellButton: {
     alignItems: 'center',

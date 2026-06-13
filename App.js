@@ -7,10 +7,7 @@ import { useConvexAuth, useQuery } from 'convex/react';
 import * as SecureStore from 'expo-secure-store';
 import { convex } from './config/convex';
 import { api } from './convex/_generated/api';
-import HomeScreen from './screens/HomeScreen';
-import SignInScreen from './screens/SignInScreen';
-import SignUpScreen from './screens/SignUpScreen';
-import ProfileSetupScreen from './screens/ProfileSetupScreen';
+import AuthFlowScreen from './screens/AuthFlowScreen';
 import MainHomeScreen from './screens/MainHomeScreen';
 
 // Sessions persist in the device keychain (fixes the old "signed out on every
@@ -72,7 +69,11 @@ export default function App() {
       client={convex}
       storage={Platform.OS === 'ios' || Platform.OS === 'android' ? secureStorage : undefined}
     >
-      <AppContent />
+      {/* White backdrop so screens always cross-fade over white, never a
+          black or transparent flash during the transition. */}
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        <AppContent />
+      </View>
     </ConvexAuthProvider>
   );
 }
@@ -90,12 +91,11 @@ function AppContent() {
   const [aboutYou, setAboutYou] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
 
-  // One shared enter transition: every navigation swaps the screen
-  // immediately and the new screen fades + slides in (from the right going
-  // forward, from the left going back). No fade-to-blank phase — that
-  // two-step fade-out/slide-in was what made the old flow feel choppy.
+  // One shared enter transition: every navigation cross-fades the incoming
+  // screen from transparent to opaque over the white app background. No
+  // lateral motion — auth screens never lurch sideways — and the fade is
+  // short enough to read as a soft settle rather than a flash.
   const transition = useRef(new Animated.Value(1)).current;
-  const directionRef = useRef(1); // 1 = forward, -1 = back
 
   const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { signIn, signOut } = useAuthActions();
@@ -116,30 +116,22 @@ function AppContent() {
     }
   }, [authLoading, isAuthenticated, currentScreen]);
 
-  // Replay the enter animation whenever the screen changes.
+  // Replay the cross-fade whenever the screen changes.
   useEffect(() => {
     transition.setValue(0);
     const animation = Animated.timing(transition, {
       toValue: 1,
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
+      duration: 240,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     });
     animation.start();
     return () => animation.stop();
   }, [currentScreen]);
 
-  const navigate = (screen, direction = 1) => {
-    directionRef.current = direction;
-    setCurrentScreen(screen);
-  };
+  const navigate = (screen) => setCurrentScreen(screen);
 
-  const navigateToSignIn = () => navigate('signin', 1);
-  const navigateToSignUp = () => navigate('signup', 1);
-  const navigateToHome = () => navigate('home', -1);
-  const navigateToProfileSetup = () => navigate('profileSetup', 1);
-  const navigateBackToSignUp = () => navigate('signup', -1);
-  const navigateToMainHome = () => navigate('mainhome', 1);
+  const navigateToMainHome = () => navigate('mainhome');
 
   const handleProfileComplete = async () => {
     // New sign-up: one call creates the account AND the profile row — the
@@ -191,107 +183,54 @@ function AppContent() {
       setYearOfStudy('');
       setSocials('');
       setAboutYou('');
-      setCurrentScreen('home');
+      navigate('home');
     } catch (error) {
       console.error('Logout error:', error);
     }
   };
 
-  if (!fontsLoaded || authLoading || isSigningUp) {
+  // Signing up keeps the auth flow mounted (the Finish button shows its own
+  // spinner) so a failed signup returns the user to where they were.
+  if (!fontsLoaded || authLoading) {
     return <LoadingScreen />;
   }
 
-  // Enter offset: 48px from the direction of travel, settling to 0.
-  const enterTranslateX = transition.interpolate({
-    inputRange: [0, 1],
-    outputRange: [directionRef.current * 48, 0],
-  });
-  const fadeAnim = transition;
-  const homeTranslateX = enterTranslateX;
-  const signInTranslateX = enterTranslateX;
+  // The whole auth journey (welcome → sign in / sign up → profile setup)
+  // lives in one screen so the purple header and logo circle physically
+  // slide between layouts instead of being swapped out.
+  const authFlow = (
+    <AuthFlowScreen
+      email={email} setEmail={setEmail}
+      password={password} setPassword={setPassword}
+      firstName={firstName} setFirstName={setFirstName}
+      lastName={lastName} setLastName={setLastName}
+      confirmPassword={confirmPassword} setConfirmPassword={setConfirmPassword}
+      program={program} setProgram={setProgram}
+      yearOfStudy={yearOfStudy} setYearOfStudy={setYearOfStudy}
+      socials={socials} setSocials={setSocials}
+      aboutYou={aboutYou} setAboutYou={setAboutYou}
+      isSigningUp={isSigningUp}
+      onSignedIn={navigateToMainHome}
+      onCompleteSignUp={handleProfileComplete}
+    />
+  );
 
-  // Render appropriate screen based on current state
-
-  if (currentScreen === 'home') {
-    return (
-      <HomeScreen
-        fadeAnim={fadeAnim}
-        homeTranslateX={homeTranslateX}
-        onSignIn={navigateToSignIn}
-        onSignUp={navigateToSignUp}
-      />
-    );
-  } else if (currentScreen === 'signin') {
-    return (
-      <SignInScreen
-        fadeAnim={fadeAnim}
-        signInTranslateX={signInTranslateX}
-        email={email}
-        setEmail={setEmail}
-        password={password}
-        setPassword={setPassword}
-        onBack={navigateToHome}
-        onSignIn={navigateToMainHome}
-      />
-    );
-  } else if (currentScreen === 'signup') {
-    return (
-      <SignUpScreen
-        fadeAnim={fadeAnim}
-        signInTranslateX={signInTranslateX}
-        firstName={firstName}
-        setFirstName={setFirstName}
-        lastName={lastName}
-        setLastName={setLastName}
-        email={email}
-        setEmail={setEmail}
-        password={password}
-        setPassword={setPassword}
-        confirmPassword={confirmPassword}
-        setConfirmPassword={setConfirmPassword}
-        onBack={navigateToHome}
-        onContinue={navigateToProfileSetup}
-      />
-    );
-  } else if (currentScreen === 'profileSetup') {
-    return (
-      <ProfileSetupScreen
-        fadeAnim={fadeAnim}
-        signInTranslateX={signInTranslateX}
-        firstName={firstName}
-        program={program}
-        setProgram={setProgram}
-        yearOfStudy={yearOfStudy}
-        setYearOfStudy={setYearOfStudy}
-        socials={socials}
-        setSocials={setSocials}
-        aboutYou={aboutYou}
-        setAboutYou={setAboutYou}
-        user={profile}
-        onBack={navigateBackToSignUp}
-        onContinue={handleProfileComplete}
-      />
-    );
-  } else if (currentScreen === 'mainhome') {
+  if (currentScreen === 'mainhome') {
     // Only render MainHomeScreen if user is authenticated
     if (!isAuthenticated) {
-      // User is not authenticated, redirect to home
       setCurrentScreen('home');
-      return (
-        <HomeScreen
-          fadeAnim={fadeAnim}
-          homeTranslateX={homeTranslateX}
-          onSignIn={navigateToSignIn}
-          onSignUp={navigateToSignUp}
-        />
-      );
+      return authFlow;
     }
     return (
-      <MainHomeScreen
-        firstName={profile?.firstName ?? firstName}
-        onLogout={handleLogout}
-        userId={profile?._id}
-      />
+      <Animated.View style={{ flex: 1, opacity: transition }}>
+        <MainHomeScreen
+          firstName={profile?.firstName ?? firstName}
+          onLogout={handleLogout}
+          userId={profile?._id}
+        />
+      </Animated.View>
     );
   }
+
+  return <Animated.View style={{ flex: 1, opacity: transition }}>{authFlow}</Animated.View>;
 }

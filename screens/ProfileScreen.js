@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  StatusBar,
   Image,
   Alert,
   ActivityIndicator,
@@ -17,7 +16,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Skeleton } from '../components/ui/Skeleton';
 
-export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemPress }) {
+export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemPress, embedded }) {
   const profile = useQuery(api.users.current);
   const myListings = useQuery(api.listings.myListings);
   const updateProfile = useMutation(api.users.updateProfile);
@@ -143,13 +142,16 @@ export default function ProfileScreen({ onBack, onLogout, onEditListing, onItemP
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
+        {embedded ? (
+          // Reached as a bottom-nav tab — no back arrow, the nav handles it.
+          <View style={styles.backButton} />
+        ) : (
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+        )}
         <Text style={styles.headerTitle}>Profile</Text>
         {isEditing ? (
           <TouchableOpacity style={styles.headerAction} onPress={() => setIsEditing(false)}>
