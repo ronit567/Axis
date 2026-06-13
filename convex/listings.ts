@@ -1,8 +1,9 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 import { QueryCtx } from "./_generated/server";
-import { requireUserId } from "./lib/auth";
+import { getUserId, requireUserId } from "./lib/auth";
+import { LIMITS, checkMaxLength, requireText } from "./lib/validate";
 
 const categoryValidator = v.union(
   v.literal("Books"),
@@ -129,9 +130,21 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const sellerId = await requireUserId(ctx);
-    if (args.price < 0) throw new Error("Price must be >= 0");
+    const title = requireText(args.title, LIMITS.title, "Title");
+    checkMaxLength(args.description, LIMITS.description, "Description");
+    checkMaxLength(args.meetupLocation, LIMITS.meetupLocation, "Meetup location");
+    checkMaxLength(args.meetupAvailability, LIMITS.meetupAvailability, "Availability");
+    if (args.images.length > LIMITS.imagesPerListing) {
+      throw new ConvexError(
+        `A listing can have at most ${LIMITS.imagesPerListing} images.`,
+      );
+    }
+    if (args.price < 0 || args.price > LIMITS.maxPrice) {
+      throw new ConvexError("Enter a valid price.");
+    }
     return ctx.db.insert("listings", {
       ...args,
+      title,
       sellerId,
       status: "active", // create + read agree by construction
       views: 0,
@@ -161,6 +174,20 @@ export const update = mutation({
   },
   handler: async (ctx, { id, ...rest }) => {
     await assertOwner(ctx, id);
+    if (rest.title !== undefined) {
+      rest.title = requireText(rest.title, LIMITS.title, "Title");
+    }
+    checkMaxLength(rest.description, LIMITS.description, "Description");
+    checkMaxLength(rest.meetupLocation, LIMITS.meetupLocation, "Meetup location");
+    checkMaxLength(rest.meetupAvailability, LIMITS.meetupAvailability, "Availability");
+    if (rest.images !== undefined && rest.images.length > LIMITS.imagesPerListing) {
+      throw new ConvexError(
+        `A listing can have at most ${LIMITS.imagesPerListing} images.`,
+      );
+    }
+    if (rest.price !== undefined && (rest.price < 0 || rest.price > LIMITS.maxPrice)) {
+      throw new ConvexError("Enter a valid price.");
+    }
     const patch = Object.fromEntries(
       Object.entries(rest).filter(([, value]) => value !== undefined),
     );
@@ -187,8 +214,13 @@ export const remove = mutation({
 export const incrementViews = mutation({
   args: { id: v.id("listings") },
   handler: async (ctx, { id }) => {
+    const userId = await getUserId(ctx);
     const listing = await ctx.db.get(id);
     if (!listing) return;
+    // Don't count anonymous opens or the seller viewing their own listing —
+    // both were trivial ways to inflate the count, and `trending` ranks on it.
+    // (Per-user dedup to fully stop inflation needs a table; tracked separately.)
+    if (!userId || listing.sellerId === userId) return;
     await ctx.db.patch(id, { views: listing.views + 1 });
   },
 });

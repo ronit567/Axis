@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { requireUserId } from "./lib/auth";
+import { LIMITS, requireText } from "./lib/validate";
 
 /** Conversations for the current user, with the other party + listing summary. */
 export const listConversations = query({
@@ -117,10 +118,15 @@ export const send = mutation({
       throw new Error("Not allowed");
     }
 
+    const text = requireText(body, LIMITS.messageBody, "Message");
+    if (offerAmount !== undefined && (offerAmount < 0 || offerAmount > LIMITS.maxPrice)) {
+      throw new ConvexError("Enter a valid offer amount.");
+    }
+
     await ctx.db.insert("messages", {
       conversationId,
       senderId,
-      body,
+      body: text,
       type: type ?? "text",
       offerAmount,
     });
@@ -128,7 +134,7 @@ export const send = mutation({
     // The RECIPIENT's unread count increments, never the sender's.
     const senderIsBuyer = senderId === convo.buyerId;
     await ctx.db.patch(conversationId, {
-      lastMessageText: body.slice(0, 100),
+      lastMessageText: text.slice(0, 100),
       lastMessageAt: Date.now(),
       buyerUnread: senderIsBuyer ? convo.buyerUnread : convo.buyerUnread + 1,
       sellerUnread: senderIsBuyer ? convo.sellerUnread + 1 : convo.sellerUnread,

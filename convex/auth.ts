@@ -1,6 +1,7 @@
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
+import { PROFILE_LIMITS, EMAIL_MAX } from "./lib/validate";
 
 /**
  * Server-side school-domain gate. The old app only checked this on the
@@ -18,6 +19,11 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         const email = String(params.email ?? "")
           .trim()
           .toLowerCase();
+        // The regex's local part is unbounded, so cap length explicitly — the
+        // sign-up form imposes the same 254 limit, this guards the API directly.
+        if (email.length > EMAIL_MAX) {
+          throw new ConvexError("That email address is too long.");
+        }
         if (!UWO_EMAIL.test(email)) {
           throw new ConvexError(
             "Axis is only available to Western students — sign up with your @uwo.ca email.",
@@ -37,7 +43,14 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         ]) {
           const value = params[key];
           if (typeof value === "string" && value.trim()) {
-            optionalFields[key] = value.trim();
+            const trimmed = value.trim();
+            const max = PROFILE_LIMITS[key];
+            // The sign-up form has no client-side maxLength, so this is the only
+            // bound on these fields — reject oversized rather than truncate.
+            if (max && trimmed.length > max) {
+              throw new ConvexError(`${key} must be ${max} characters or fewer.`);
+            }
+            optionalFields[key] = trimmed;
           }
         }
         return { email, ...optionalFields };

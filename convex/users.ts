@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getUserId, requireUserId } from "./lib/auth";
+import { PROFILE_LIMITS, checkMaxLength } from "./lib/validate";
 
 /** The signed-in user's profile, or null. Reactive — re-renders on change. */
 export const current = query({
@@ -61,6 +62,12 @@ export const updateProfile = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    checkMaxLength(args.firstName, PROFILE_LIMITS.firstName, "First name");
+    checkMaxLength(args.lastName, PROFILE_LIMITS.lastName, "Last name");
+    checkMaxLength(args.program, PROFILE_LIMITS.program, "Program");
+    checkMaxLength(args.yearOfStudy, PROFILE_LIMITS.yearOfStudy, "Year of study");
+    checkMaxLength(args.bio, PROFILE_LIMITS.bio, "Bio");
+    checkMaxLength(args.phone, PROFILE_LIMITS.phone, "Phone");
     // Only patch provided fields.
     const patch = Object.fromEntries(
       Object.entries(args).filter(([, value]) => value !== undefined),

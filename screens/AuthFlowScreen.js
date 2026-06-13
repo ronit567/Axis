@@ -351,6 +351,7 @@ export default function AuthFlowScreen({
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="next"
+                  maxLength={254}
                 />
                 <Field
                   label="Password"
@@ -398,6 +399,7 @@ export default function AuthFlowScreen({
                     placeholder="Alex"
                     autoCapitalize="words"
                     returnKeyType="next"
+                    maxLength={80}
                   />
                   <Field
                     label="Last name"
@@ -407,6 +409,7 @@ export default function AuthFlowScreen({
                     placeholder="Chen"
                     autoCapitalize="words"
                     returnKeyType="next"
+                    maxLength={80}
                   />
                 </View>
                 <Field
@@ -418,6 +421,7 @@ export default function AuthFlowScreen({
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="next"
+                  maxLength={254}
                 />
                 <Field
                   label="Password"
@@ -480,6 +484,7 @@ export default function AuthFlowScreen({
                     placeholder="e.g. Engineering"
                     autoCapitalize="words"
                     returnKeyType="next"
+                    maxLength={120}
                   />
                   <Field
                     label="Year of study"
@@ -488,6 +493,7 @@ export default function AuthFlowScreen({
                     onChangeText={setYearOfStudy}
                     placeholder="e.g. 2"
                     returnKeyType="next"
+                    maxLength={40}
                   />
                 </View>
                 <Field
@@ -498,6 +504,7 @@ export default function AuthFlowScreen({
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="next"
+                  maxLength={100}
                 />
                 <View style={styles.fieldWrap}>
                   <Text style={styles.fieldLabel}>About you (optional)</Text>
@@ -511,6 +518,7 @@ export default function AuthFlowScreen({
                       multiline
                       numberOfLines={4}
                       textAlignVertical="top"
+                      maxLength={1000}
                     />
                   </View>
                 </View>

@@ -117,6 +117,12 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
       Alert.alert('Required', 'Please enter a valid price.');
       return false;
     }
+    // Matches the server cap (LIMITS.maxPrice) so an over-cap price is caught
+    // here, before any images upload, instead of failing the mutation after.
+    if (parseFloat(price) > 1000000) {
+      Alert.alert('Price too high', 'Price must be $1,000,000 or less.');
+      return false;
+    }
     if (!category) {
       Alert.alert('Required', 'Please select a category.');
       return false;
