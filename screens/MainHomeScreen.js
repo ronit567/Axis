@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { StyleSheet, View, Image, ScrollView, StatusBar, Text, TouchableOpacity, TextInput, FlatList, Pressable } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
+import { haptics } from '../config/haptics';
 import ListingCard from '../components/explore/ListingCard';
 import FilterModal from '../components/explore/FilterModal';
 import ActiveFilters from '../components/explore/ActiveFilters';
@@ -37,6 +39,7 @@ const CATEGORY_CHIPS = [
 ];
 
 export default function MainHomeScreen({ firstName, onLogout, userId }) {
+  const insets = useSafeAreaInsets();
   const [searchText, setSearchText] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -135,6 +138,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   
   // Chips toggle: tapping the selected category deselects back to All
   const handleCategoryFilterPress = (category) => {
+    haptics.tap();
     setFilters({
       ...filters,
       category: filters.category === category ? 'All' : category,
@@ -243,6 +247,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   };
 
   const handleSellPress = () => {
+    haptics.press();
     go('createListing', 'modal');
   };
 
@@ -375,7 +380,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const renderHome = () => (
     <View style={styles.container}>
       {/* Purple header: greeting + avatar, then search with built-in filter */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerTop}>
           <View style={styles.welcomeContainer}>
             <Text style={styles.welcomeText}>Welcome back,</Text>
@@ -614,7 +619,10 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     return (
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => go(key)}
+        onPress={() => {
+          if (!active) haptics.tap();
+          go(key);
+        }}
         accessibilityRole="tab"
         accessibilityLabel={label}
         accessibilityState={{ selected: active }}
@@ -627,9 +635,10 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
 
   return (
     <View style={styles.shell}>
-      {/* Every tab now has the purple header, so light icons across the board;
-          item details is the exception (light image area → dark icons). */}
-      <StatusBar barStyle={currentScreen === 'itemDetails' ? 'dark-content' : 'light-content'} />
+      {/* Every tab has the purple header and item details now has a dark image
+          scrim, so white status-bar icons read everywhere. The compose flow
+          (white screen) sets its own dark-content bar while mounted. */}
+      <StatusBar barStyle="light-content" />
 
       {/* All four tab pages stay mounted; only the active one is visible, so
           switching tabs is instant and keeps state, scroll, and live data. */}
@@ -654,7 +663,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
       </View>
 
       {/* Persistent bottom navigation — stays put across every tab */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         {renderNavItem('home', 'Home', 'home', 'home-outline')}
         {renderNavItem('saved', 'Saved', 'heart', 'heart-outline')}
         <PressableScale style={styles.sellButton} scaleTo={0.88} onPress={handleSellPress}>
@@ -703,7 +712,6 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#502E82',
-    paddingTop: 60,
     paddingBottom: 20,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 28,
@@ -840,7 +848,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     paddingTop: 10,
-    paddingBottom: 28,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -893,7 +900,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
     color: '#333',
     fontFamily: 'Poppins_600SemiBold',
   },

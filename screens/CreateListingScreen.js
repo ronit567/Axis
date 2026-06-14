@@ -15,14 +15,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
+import { haptics } from '../config/haptics';
 
 const CATEGORIES = ['Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'];
 const CONDITIONS = ['Like New', 'Good', 'Fair'];
 
 // Pass a `listing` (hydrated, with imageUrls) to edit it instead of creating.
 export default function CreateListingScreen({ onBack, onSuccess, listing }) {
+  const insets = useSafeAreaInsets();
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const createListing = useMutation(api.listings.create);
   const updateListing = useMutation(api.listings.update);
@@ -184,6 +187,7 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
         listingId = await createListing(fields);
       }
 
+      haptics.success();
       Alert.alert('Success', isEditing ? 'Your listing has been updated!' : 'Your listing has been posted!', [
         { text: 'OK', onPress: () => onSuccess && onSuccess(listingId) },
       ]);
@@ -200,7 +204,7 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
       <StatusBar barStyle="dark-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
@@ -383,7 +387,7 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
       </KeyboardAvoidingView>
 
       {/* Submit Button */}
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
         <TouchableOpacity
           style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
           onPress={handleSubmit}
@@ -410,11 +414,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 60,
     paddingBottom: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    borderBottomColor: '#EDE8F4',
   },
   backButton: {
     width: 40,
@@ -502,21 +505,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#F5F5F5',
+    borderColor: '#E8E3F1',
   },
   optionButtonSelected: {
-    backgroundColor: '#F3EAFA',
-    borderColor: '#B39BD5',
+    backgroundColor: '#502E82',
+    borderColor: '#502E82',
   },
   optionText: {
     fontSize: 14,
     fontFamily: 'Poppins_400Regular',
-    color: '#666666',
+    color: '#4A4458',
   },
   optionTextSelected: {
-    color: '#502E82',
+    color: '#FFFFFF',
     fontFamily: 'Poppins_500Medium',
   },
   imageScroll: {
@@ -557,9 +560,9 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 12,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F3EFF9',
     borderWidth: 2,
-    borderColor: '#E0E0E0',
+    borderColor: '#D9CEEC',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
@@ -576,10 +579,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 20,
-    paddingBottom: 36,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
+    borderTopColor: '#EDE8F4',
   },
   submitButton: {
     backgroundColor: '#502E82',

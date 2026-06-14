@@ -247,6 +247,9 @@ export default function MessagesListScreen({ onBack, onChatPress, embedded }) {
         contentContainerStyle={filteredChats.length === 0 ? styles.emptyList : styles.chatList}
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        windowSize={9}
+        removeClippedSubviews
       />
     </View>
   );

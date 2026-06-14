@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -27,6 +28,7 @@ const SHEET_MIN_HEIGHT = Dimensions.get('window').height - 200;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOpenSettings, embedded }) {
+  const insets = useSafeAreaInsets();
   const profile = useQuery(api.users.current);
 
   // One ref per listing row so a tap can measure its rect and let item details
@@ -178,7 +180,7 @@ export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOp
     // while the profile loads.
     return (
       <View style={styles.container}>
-        <View style={styles.banner}>
+        <View style={[styles.banner, { paddingTop: insets.top + 12 }]}>
           <View style={styles.bannerTopRow} />
           <View style={[styles.avatar, styles.avatarSkeleton]} />
           <View style={styles.heroSkelLineWide} />
@@ -212,7 +214,7 @@ export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOp
         { transform: [{ translateX: editSlide }] },
       ]}
     >
-        <View style={styles.editBanner}>
+        <View style={[styles.editBanner, { paddingTop: insets.top + 12 }]}>
           <View style={styles.bannerTopRow}>
             <View style={styles.bannerSpacer} />
             <TouchableOpacity
@@ -350,7 +352,7 @@ export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOp
         <Animated.View
           style={[
             styles.banner,
-            { transform: [{ translateY: bannerShift }] },
+            { paddingTop: insets.top + 12, transform: [{ translateY: bannerShift }] },
           ]}
         >
           <View style={styles.bannerTopRow}>
@@ -526,7 +528,6 @@ const styles = StyleSheet.create({
   },
   editBanner: {
     backgroundColor: '#502E82',
-    paddingTop: 56,
     paddingBottom: 22,
     paddingHorizontal: 24,
     borderBottomLeftRadius: 28,
@@ -603,7 +604,6 @@ const styles = StyleSheet.create({
   },
   banner: {
     backgroundColor: '#502E82',
-    paddingTop: 56,
     paddingBottom: 24,
     paddingHorizontal: 24,
     alignItems: 'center',
@@ -843,7 +843,7 @@ const styles = StyleSheet.create({
   listingPrice: {
     fontSize: 14,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#B39BD5',
+    color: '#502E82',
     marginTop: 1,
   },
   statusBadge: {

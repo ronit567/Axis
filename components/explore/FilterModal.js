@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Modal, Animated, Easing, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { PRICE_CAP } from './filters';
 import PressableScale from '../ui/PressableScale';
+import { haptics } from '../../config/haptics';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -18,6 +20,12 @@ export default function FilterModal({
 }) {
   const updateFilter = (key, value) => {
     onUpdateFilters({ ...filters, [key]: value });
+  };
+
+  // Light tap on discrete chip selections (not the continuous sliders).
+  const selectFilter = (key, value) => {
+    haptics.tap();
+    updateFilter(key, value);
   };
 
   // Keep the sheet mounted through its exit so the close animation can play
@@ -79,8 +87,14 @@ export default function FilterModal({
           {/* Modal Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filters</Text>
-            <Pressable onPress={onClose}>
-              <Text style={styles.closeButton}>✕</Text>
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              style={styles.closeButton}
+              accessibilityRole="button"
+              accessibilityLabel="Close filters"
+            >
+              <Ionicons name="close" size={22} color="#502E82" />
             </Pressable>
           </View>
 
@@ -96,7 +110,7 @@ export default function FilterModal({
                       styles.filterOption,
                       filters.category === category && styles.filterOptionSelected,
                     ]}
-                    onPress={() => updateFilter('category', category)}
+                    onPress={() => selectFilter('category', category)}
                   >
                     <Text
                       style={[
@@ -122,7 +136,7 @@ export default function FilterModal({
                       styles.filterOption,
                       filters.condition === condition && styles.filterOptionSelected,
                     ]}
-                    onPress={() => updateFilter('condition', condition)}
+                    onPress={() => selectFilter('condition', condition)}
                   >
                     <Text
                       style={[
@@ -213,18 +227,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: '#EDE8F4',
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
+    color: '#1F1B29',
     fontFamily: 'Poppins_600SemiBold',
   },
   closeButton: {
-    fontSize: 24,
-    color: '#333',
-    fontWeight: '300',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3EAFA',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBody: {
     paddingHorizontal: 20,
@@ -235,8 +251,7 @@ const styles = StyleSheet.create({
   },
   filterSectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    color: '#1F1B29',
     marginBottom: 12,
     fontFamily: 'Poppins_600SemiBold',
   },
@@ -249,23 +264,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#E8E3F1',
   },
   filterOptionSelected: {
-    backgroundColor: '#B39BD5',
-    borderColor: '#B39BD5',
+    backgroundColor: '#502E82',
+    borderColor: '#502E82',
   },
   filterOptionText: {
     fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
+    color: '#4A4458',
     fontFamily: 'Poppins_500Medium',
   },
   filterOptionTextSelected: {
-    color: 'white',
-    fontWeight: '600',
+    color: '#FFFFFF',
     fontFamily: 'Poppins_600SemiBold',
   },
   priceRangeContainer: {
@@ -275,8 +288,7 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#B39BD5',
+    color: '#502E82',
     fontFamily: 'Poppins_600SemiBold',
   },
   sliderContainer: {
@@ -301,32 +313,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: '#EDE8F4',
   },
   resetButton: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F3EFF9',
     alignItems: 'center',
   },
   resetButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+    color: '#502E82',
     fontFamily: 'Poppins_600SemiBold',
   },
   applyButton: {
     flex: 2,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#B39BD5',
+    backgroundColor: '#502E82',
     alignItems: 'center',
   },
   applyButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
+    color: '#FFFFFF',
     fontFamily: 'Poppins_600SemiBold',
   },
 });

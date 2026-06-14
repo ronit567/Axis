@@ -2,6 +2,8 @@ import React, { useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PressableScale from '../ui/PressableScale';
+import { haptics } from '../../config/haptics';
+import { colors, fonts } from '../../config/theme';
 
 export default function ListingCard({ listing, onPress, isSaved, onToggleSave }) {
   // First image URL, resolved server-side from the storage IDs in
@@ -32,6 +34,7 @@ export default function ListingCard({ listing, onPress, isSaved, onToggleSave })
 
   const heartScale = useRef(new Animated.Value(1)).current;
   const handleHeartPress = () => {
+    haptics.tap();
     Animated.sequence([
       Animated.spring(heartScale, { toValue: 1.35, speed: 60, bounciness: 12, useNativeDriver: true }),
       Animated.spring(heartScale, { toValue: 1, speed: 40, bounciness: 8, useNativeDriver: true }),
@@ -59,12 +62,14 @@ export default function ListingCard({ listing, onPress, isSaved, onToggleSave })
             style={styles.heartButton}
             hitSlop={8}
             onPress={handleHeartPress}
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save listing'}
           >
             <Animated.View style={{ transform: [{ scale: heartScale }] }}>
               <Ionicons
                 name={isSaved ? 'heart' : 'heart-outline'}
                 size={20}
-                color={isSaved ? '#E0245E' : '#FFFFFF'}
+                color={isSaved ? colors.save : '#FFFFFF'}
               />
             </Animated.View>
           </Pressable>
@@ -123,17 +128,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
+    color: colors.textBody,
     marginBottom: 4,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: fonts.semibold,
   },
   price: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#502E82',
+    color: colors.primary,
     marginBottom: 6,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: fonts.semibold,
   },
   metaRow: {
     flexDirection: 'row',

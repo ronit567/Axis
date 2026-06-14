@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, fonts } from '../../config/theme';
 
 /**
  * Shared top header for the bottom-nav tab screens, so Saved / Messages /
@@ -25,9 +27,10 @@ export default function ScreenHeader({
   onAction,
   children,
 }) {
+  const insets = useSafeAreaInsets();
   const showBack = !embedded && onBack;
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
       <View style={styles.row}>
         {showBack && (
           <TouchableOpacity
@@ -61,8 +64,7 @@ export default function ScreenHeader({
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#502E82',
-    paddingTop: 60,
+    backgroundColor: colors.primary,
     paddingBottom: 18,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 28,
@@ -79,11 +81,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
+    fontFamily: fonts.semibold,
+    color: colors.onPrimary,
   },
   badge: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.onPrimary,
     borderRadius: 11,
     minWidth: 22,
     height: 22,
@@ -93,17 +95,17 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   badgeText: {
-    color: '#502E82',
+    color: colors.primary,
     fontSize: 12,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: fonts.semibold,
   },
   spacer: {
     flex: 1,
   },
   actionText: {
     fontSize: 15,
-    fontFamily: 'Poppins_500Medium',
-    color: '#FFFFFF',
+    fontFamily: fonts.medium,
+    color: colors.onPrimary,
   },
   below: {
     marginTop: 16,

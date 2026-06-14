@@ -63,6 +63,9 @@ export default function SavedScreen({ onBack, onItemPress, embedded }) {
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={6}
+          windowSize={7}
+          removeClippedSubviews
           renderItem={({ item }) => (
             <View style={styles.cardWrap}>
               <ListingCard

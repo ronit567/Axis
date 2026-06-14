@@ -12,12 +12,16 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
+import { haptics } from '../config/haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onItemPress, onEditListing }) {
+  const insets = useSafeAreaInsets();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Get images from item or use placeholder
@@ -147,30 +151,56 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
 
   return (
     <View style={styles.container}>
-      {/* Header - Now overlaid on image */}
-      <View style={styles.headerOverlay}>
-        <TouchableOpacity onPress={onBack} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color="#333333" />
+      {/* Header — floating buttons over a top scrim so they stay legible on
+          any image without a flat white band cutting across the photo. */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0)']}
+        style={[styles.headerScrim, { height: insets.top + 72 }]}
+        pointerEvents="none"
+      />
+      <View style={[styles.headerOverlay, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.headerButton}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <View style={styles.headerActions}>
           {!isOwner && (
             <TouchableOpacity
-              onPress={() => toggleSave({ listingId: item._id })}
+              onPress={() => {
+                haptics.tap();
+                toggleSave({ listingId: item._id });
+              }}
               style={styles.headerButton}
+              accessibilityRole="button"
+              accessibilityLabel={isSaved ? 'Remove from saved' : 'Save listing'}
             >
               <Ionicons
                 name={isSaved ? 'heart' : 'heart-outline'}
-                size={24}
-                color={isSaved ? '#E0245E' : '#333333'}
+                size={22}
+                color={isSaved ? '#FF6090' : '#FFFFFF'}
               />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={handleShare} style={styles.headerButton}>
-            <Ionicons name="share-outline" size={24} color="#333333" />
+          <TouchableOpacity
+            onPress={handleShare}
+            style={styles.headerButton}
+            accessibilityRole="button"
+            accessibilityLabel="Share listing"
+          >
+            <Ionicons name="share-outline" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           {isOwner && (
-            <TouchableOpacity onPress={handleEditListing} style={styles.headerButton}>
-              <Ionicons name="create-outline" size={24} color="#333333" />
+            <TouchableOpacity
+              onPress={handleEditListing}
+              style={styles.headerButton}
+              accessibilityRole="button"
+              accessibilityLabel="Edit listing"
+            >
+              <Ionicons name="create-outline" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           )}
         </View>
@@ -444,7 +474,7 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
 
       {/* Bottom Action Bar - Different for owner vs buyer */}
       {isOwner ? (
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
           <TouchableOpacity
             style={styles.ownerActionButton}
             onPress={handleDeleteListing}
@@ -461,10 +491,13 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
           <TouchableOpacity
             style={styles.chatButton}
-            onPress={() => onChatWithSeller(item)}
+            onPress={() => {
+              haptics.press();
+              onChatWithSeller(item);
+            }}
           >
             <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
             <Text style={styles.chatButtonText}>Message Seller</Text>
@@ -480,6 +513,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  headerScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9,
+  },
   headerOverlay: {
     position: 'absolute',
     top: 0,
@@ -488,24 +528,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 50,
     paddingBottom: 12,
     paddingHorizontal: 16,
     zIndex: 10,
-    backgroundColor: 'rgba(255,255,255,0.95)',
   },
   headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   headerActions: {
     flexDirection: 'row',
@@ -516,7 +549,6 @@ const styles = StyleSheet.create({
   },
   imageGallery: {
     position: 'relative',
-    marginTop: 90,
   },
   imageContainer: {
     width: SCREEN_WIDTH,
@@ -562,7 +594,7 @@ const styles = StyleSheet.create({
   },
   ownerBadge: {
     position: 'absolute',
-    top: 16,
+    bottom: 16,
     left: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -595,7 +627,7 @@ const styles = StyleSheet.create({
   itemPrice: {
     fontSize: 28,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#B39BD5',
+    color: '#502E82',
   },
   statsRow: {
     flexDirection: 'row',
@@ -879,7 +911,7 @@ const styles = StyleSheet.create({
   similarPrice: {
     fontSize: 14,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#B39BD5',
+    color: '#502E82',
   },
   bottomBar: {
     position: 'absolute',
@@ -889,9 +921,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
+    paddingTop: 12,
     paddingHorizontal: 16,
-    paddingBottom: 30,
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
     shadowColor: '#000',

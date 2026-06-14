@@ -14,9 +14,11 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Skeleton } from '../components/ui/Skeleton';
+import { haptics } from '../config/haptics';
 
 const BUYER_QUICK_REPLIES = [
   "Is this still available?",
@@ -31,6 +33,7 @@ const SELLER_QUICK_REPLIES = [
 ];
 
 export default function ChatScreen({ chat, item, onBack }) {
+  const insets = useSafeAreaInsets();
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
@@ -104,6 +107,7 @@ export default function ChatScreen({ chat, item, onBack }) {
     if (text.trim() === '' || isSending) return;
 
     const messageText = text.trim();
+    haptics.tap();
     setInputText('');
     setShowQuickReplies(false);
     Keyboard.dismiss();
@@ -241,7 +245,7 @@ export default function ChatScreen({ chat, item, onBack }) {
   const quickReplies = isBuyer ? BUYER_QUICK_REPLIES : SELLER_QUICK_REPLIES;
 
   const header = (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
       <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel="Back">
         <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
       </TouchableOpacity>
@@ -351,7 +355,7 @@ export default function ChatScreen({ chat, item, onBack }) {
       )}
 
       {/* Input Bar */}
-      <View style={styles.inputContainer}>
+      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
@@ -397,7 +401,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#502E82',
-    paddingTop: 56,
     paddingBottom: 12,
     paddingHorizontal: 16,
   },
@@ -610,8 +613,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#EDE8F4',
     gap: 8,

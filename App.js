@@ -4,6 +4,7 @@ import { useFonts, HammersmithOne_400Regular } from '@expo-google-fonts/hammersm
 import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from '@expo-google-fonts/poppins';
 import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
 import { useConvexAuth, useQuery } from 'convex/react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { convex } from './config/convex';
 import { api } from './convex/_generated/api';
@@ -65,16 +66,18 @@ function LoadingScreen() {
 
 export default function App() {
   return (
-    <ConvexAuthProvider
-      client={convex}
-      storage={Platform.OS === 'ios' || Platform.OS === 'android' ? secureStorage : undefined}
-    >
-      {/* White backdrop so screens always cross-fade over white, never a
-          black or transparent flash during the transition. */}
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-        <AppContent />
-      </View>
-    </ConvexAuthProvider>
+    <SafeAreaProvider>
+      <ConvexAuthProvider
+        client={convex}
+        storage={Platform.OS === 'ios' || Platform.OS === 'android' ? secureStorage : undefined}
+      >
+        {/* White backdrop so screens always cross-fade over white, never a
+            black or transparent flash during the transition. */}
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+          <AppContent />
+        </View>
+      </ConvexAuthProvider>
+    </SafeAreaProvider>
   );
 }
 
