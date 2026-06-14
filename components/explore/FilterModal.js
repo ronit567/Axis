@@ -1,7 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal, Animated, Easing, Dimensions } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { PRICE_CAP } from './filters';
 import PressableScale from '../ui/PressableScale';
+
+const { height: SCREEN_H } = Dimensions.get('window');
 
 const CATEGORIES = ['All', 'Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'];
 const CONDITIONS = ['All', 'Like New', 'Good', 'Fair'];
@@ -17,15 +20,62 @@ export default function FilterModal({
     onUpdateFilters({ ...filters, [key]: value });
   };
 
+  // Keep the sheet mounted through its exit so the close animation can play
+  // before the native Modal unmounts.
+  const [rendered, setRendered] = useState(visible);
+  const backdrop = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(SCREEN_H)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setRendered(true);
+      Animated.parallel([
+        Animated.timing(backdrop, {
+          toValue: 1,
+          duration: 240,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        // Spring gives the sheet a soft "pop"; clamped so it never overshoots
+        // past its resting edge and leaves a gap at the bottom.
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          speed: 14,
+          bounciness: 6,
+          overshootClamping: true,
+        }),
+      ]).start();
+    } else if (rendered) {
+      Animated.parallel([
+        Animated.timing(backdrop, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: SCREEN_H,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) setRendered(false);
+      });
+    }
+  }, [visible]);
+
+  if (!rendered) return null;
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        {/* Scrim fades in/out independently of the sheet's slide */}
+        <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdrop }]} />
+        {/* Tap outside the sheet to dismiss */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close filters" />
+        <Animated.View style={[styles.modalContent, { transform: [{ translateY }] }]}>
           {/* Modal Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filters</Text>
@@ -136,7 +186,7 @@ export default function FilterModal({
               <Text style={styles.applyButtonText}>Apply Filters</Text>
             </PressableScale>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -145,8 +195,10 @@ export default function FilterModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
     backgroundColor: 'white',

@@ -8,6 +8,18 @@ export default function ListingCard({ listing, onPress, isSaved, onToggleSave })
   // listing.images. No image → branded placeholder block.
   const imageUrl = listing.imageUrls && listing.imageUrls[0];
 
+  // Measure the card's on-screen rect at tap time and hand it up, so the
+  // details screen can grow out of exactly this card (container transform).
+  const cardRef = useRef(null);
+  const handlePress = () => {
+    const node = cardRef.current;
+    if (node && typeof node.measureInWindow === 'function') {
+      node.measureInWindow((x, y, width, height) => onPress({ x, y, width, height }));
+    } else {
+      onPress(null);
+    }
+  };
+
   // Remote images fade in once loaded so cards don't pop harshly.
   const imageOpacity = useRef(new Animated.Value(0)).current;
   const handleImageLoad = () => {
@@ -28,7 +40,7 @@ export default function ListingCard({ listing, onPress, isSaved, onToggleSave })
   };
 
   return (
-    <PressableScale style={styles.card} onPress={onPress}>
+    <PressableScale ref={cardRef} style={styles.card} onPress={handlePress}>
       <View style={styles.imagePlaceholder}>
         {imageUrl ? (
           <Animated.Image

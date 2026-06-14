@@ -8,7 +8,7 @@ import FilterModal from '../components/explore/FilterModal';
 import ActiveFilters from '../components/explore/ActiveFilters';
 import { DEFAULT_FILTERS, PRICE_CAP } from '../components/explore/filters';
 import FadeInView from '../components/ui/FadeInView';
-import ScreenTransition from '../components/ui/ScreenTransition';
+import ContainerTransform from '../components/ui/ContainerTransform';
 import PressableScale from '../components/ui/PressableScale';
 import { SkeletonFeedSection } from '../components/ui/Skeleton';
 import MessagesListScreen from './MessagesListScreen';
@@ -17,11 +17,12 @@ import ChatScreen from './ChatScreen';
 import CreateListingScreen from './CreateListingScreen';
 import ProfileScreen from './ProfileScreen';
 import SavedScreen from './SavedScreen';
+import SettingsScreen from './SettingsScreen';
 
 // Peer destinations that share the persistent bottom nav and stay mounted.
 const TAB_SCREENS = ['home', 'saved', 'messagesList', 'profile'];
 // Drill-ins / compose flows that render full-screen over the tab shell.
-const OVERLAY_SCREENS = ['itemDetails', 'chat', 'createListing', 'editListing'];
+const OVERLAY_SCREENS = ['itemDetails', 'chat', 'createListing', 'editListing', 'settings'];
 
 // Always-visible labeled category chips — replaces the old hamburger circle
 // that hid icon-only category buttons behind a tap.
@@ -48,13 +49,32 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
 
-  // Transition type for the next screen change, per platform conventions:
-  // 'tab' for bottom-nav peers (fade in place), 'push'/'pop' for drill-ins
-  // (slide from right / left), 'modal' for compose flows (slide up from
-  // bottom), 'none' for the initial mount.
-  const navTransition = useRef('none');
-  const go = (screen, transition = 'none') => {
-    navTransition.current = transition;
+  // How the active overlay should animate, and (for 'expand') the on-screen
+  // rect of the element it was launched from so it can grow out of / collapse
+  // back into it. Kept in state so the mounted overlay reads a stable config.
+  const [overlayType, setOverlayType] = useState('none');
+  const [overlayOrigin, setOverlayOrigin] = useState(null);
+
+  // Overlay close is two-phase so the exit animation can play: a back press
+  // flips `overlayClosing`, ContainerTransform runs the reverse animation, then
+  // its onClosed fires the queued navigation that actually unmounts it.
+  const [overlayClosing, setOverlayClosing] = useState(false);
+  const pendingClose = useRef(null);
+  const requestCloseOverlay = (after) => {
+    if (pendingClose.current) return; // already collapsing
+    pendingClose.current = after;
+    setOverlayClosing(true);
+  };
+  const handleOverlayClosed = () => {
+    const after = pendingClose.current;
+    pendingClose.current = null;
+    setOverlayClosing(false);
+    if (after) after();
+  };
+
+  const go = (screen, transition = 'none', origin = null) => {
+    setOverlayType(transition);
+    setOverlayOrigin(origin);
     setCurrentScreen(screen);
   };
 
@@ -153,20 +173,25 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const filteredRecentlyListed = useMemo(() => filterItems(recentItems), [filters, recentItems]);
   
   // Navigation handlers
-  const handleItemPress = (item) => {
+  const handleItemPress = (item, origin = null) => {
     // Opening details from details (similar items) keeps the original source
     if (currentScreen !== 'itemDetails') {
       setDetailsSource(currentScreen);
     }
     setSelectedItem(item);
-    go('itemDetails', 'push');
+    // Grow the details screen out of the tapped card; fall back to a plain
+    // push slide if we couldn't measure the card (e.g. ref unavailable).
+    go('itemDetails', origin ? 'expand' : 'push', origin);
   };
 
-  // Back from details pops to wherever it was opened from
+  // Back from details collapses into the card, then returns to wherever it was
+  // opened from (home, saved, or profile).
   const handleCloseDetails = () => {
-    go(detailsSource, 'pop');
-    setSelectedItem(null);
-    setSelectedChat(null);
+    requestCloseOverlay(() => {
+      go(detailsSource, 'tab');
+      setSelectedItem(null);
+      setSelectedChat(null);
+    });
   };
 
   const handleChatWithSeller = (item) => {
@@ -181,31 +206,40 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
       sellerId: item.sellerId,
       listingId: item._id,
     });
+    // Forward into a fresh thread from the listing — slide in (no row to grow
+    // out of here), and on close the listing details is gone, so land home.
     go('chat', 'push');
   };
 
   const handleChatPress = (chat) => {
     setSelectedChat(chat);
+    // Conversations slide in from the right (and back out on return).
     go('chat', 'push');
   };
 
   // Dismiss an overlay back to the home tab (e.g. closing the compose flow);
   // chat opened from a listing also returns home.
   const homeAsTab = () => {
-    go('home', 'tab');
-    setSelectedItem(null);
-    setSelectedChat(null);
+    requestCloseOverlay(() => {
+      go('home', 'tab');
+      setSelectedItem(null);
+      setSelectedChat(null);
+    });
   };
 
   const homeAsPop = () => {
-    go('home', 'pop');
-    setSelectedItem(null);
-    setSelectedChat(null);
+    requestCloseOverlay(() => {
+      go('home', 'tab');
+      setSelectedItem(null);
+      setSelectedChat(null);
+    });
   };
 
   const handleBackToMessages = () => {
-    go('messagesList', 'pop');
-    setSelectedChat(null);
+    requestCloseOverlay(() => {
+      go('messagesList', 'tab');
+      setSelectedChat(null);
+    });
   };
 
   const handleSellPress = () => {
@@ -222,9 +256,22 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   };
 
   const handleBackToProfile = () => {
-    // Dismissing the edit-listing modal: profile reappears in place
-    go('profile', 'tab');
-    setSelectedItem(null);
+    // Dismissing the edit-listing modal: slide it back down, profile reappears.
+    requestCloseOverlay(() => {
+      go('profile', 'tab');
+      setSelectedItem(null);
+    });
+  };
+
+  const handleOpenSettings = () => {
+    // Settings slides in from the right over the profile tab.
+    go('settings', 'push');
+  };
+
+  const handleBackFromSettings = () => {
+    requestCloseOverlay(() => {
+      go('profile', 'tab');
+    });
   };
 
   const handleListingCreated = () => {
@@ -246,7 +293,14 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   let overlay = null;
   if (currentScreen === 'itemDetails' && selectedItem) {
     overlay = (
-      <ScreenTransition key="itemDetails" type={navTransition.current} style={styles.overlay}>
+      <ContainerTransform
+        key="itemDetails"
+        type={overlayType}
+        origin={overlayOrigin}
+        closing={overlayClosing}
+        onClosed={handleOverlayClosed}
+        style={styles.overlay}
+      >
         <ItemDetailsScreen
           item={selectedItem}
           onBack={handleCloseDetails}
@@ -254,36 +308,67 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
           onItemPress={handleItemPress}
           onEditListing={handleEditListing}
         />
-      </ScreenTransition>
+      </ContainerTransform>
     );
   } else if (currentScreen === 'chat') {
     overlay = (
-      <ScreenTransition key="chat" type={navTransition.current} style={styles.overlay}>
+      <ContainerTransform
+        key="chat"
+        type={overlayType}
+        origin={overlayOrigin}
+        closing={overlayClosing}
+        onClosed={handleOverlayClosed}
+        style={styles.overlay}
+      >
         <ChatScreen
           chat={selectedChat}
           item={selectedItem}
           onBack={selectedItem ? homeAsPop : handleBackToMessages}
         />
-      </ScreenTransition>
+      </ContainerTransform>
     );
   } else if (currentScreen === 'createListing') {
     overlay = (
-      <ScreenTransition key="createListing" type={navTransition.current} style={styles.overlay}>
+      <ContainerTransform
+        key="createListing"
+        type={overlayType}
+        closing={overlayClosing}
+        onClosed={handleOverlayClosed}
+        style={styles.overlay}
+      >
         <CreateListingScreen
           onBack={homeAsTab}
           onSuccess={handleListingCreated}
         />
-      </ScreenTransition>
+      </ContainerTransform>
     );
   } else if (currentScreen === 'editListing' && selectedItem) {
     overlay = (
-      <ScreenTransition key="editListing" type={navTransition.current} style={styles.overlay}>
+      <ContainerTransform
+        key="editListing"
+        type={overlayType}
+        closing={overlayClosing}
+        onClosed={handleOverlayClosed}
+        style={styles.overlay}
+      >
         <CreateListingScreen
           listing={selectedItem}
           onBack={handleBackToProfile}
           onSuccess={handleBackToProfile}
         />
-      </ScreenTransition>
+      </ContainerTransform>
+    );
+  } else if (currentScreen === 'settings') {
+    overlay = (
+      <ContainerTransform
+        key="settings"
+        type={overlayType}
+        closing={overlayClosing}
+        onClosed={handleOverlayClosed}
+        style={styles.overlay}
+      >
+        <SettingsScreen onBack={handleBackFromSettings} onLogout={onLogout} />
+      </ContainerTransform>
     );
   }
 
@@ -416,7 +501,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
                 <View style={styles.horizontalCard}>
                   <ListingCard
                     listing={item}
-                    onPress={() => handleItemPress(item)}
+                    onPress={(origin) => handleItemPress(item, origin)}
                     isSaved={savedSet.has(item._id)}
                     onToggleSave={
                       item.sellerId === userId
@@ -446,7 +531,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
                 <View style={styles.horizontalCard}>
                   <ListingCard
                     listing={item}
-                    onPress={() => handleItemPress(item)}
+                    onPress={(origin) => handleItemPress(item, origin)}
                     isSaved={savedSet.has(item._id)}
                     onToggleSave={
                       item.sellerId === userId
@@ -476,7 +561,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
                 <View style={styles.horizontalCard}>
                   <ListingCard
                     listing={item}
-                    onPress={() => handleItemPress(item)}
+                    onPress={(origin) => handleItemPress(item, origin)}
                     isSaved={savedSet.has(item._id)}
                     onToggleSave={
                       item.sellerId === userId
@@ -542,8 +627,9 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
 
   return (
     <View style={styles.shell}>
-      {/* Status bar matches the active tab's header colour */}
-      <StatusBar barStyle={activeTab === 'home' || activeTab === 'messagesList' ? 'light-content' : 'dark-content'} />
+      {/* Every tab now has the purple header, so light icons across the board;
+          item details is the exception (light image area → dark icons). */}
+      <StatusBar barStyle={currentScreen === 'itemDetails' ? 'dark-content' : 'light-content'} />
 
       {/* All four tab pages stay mounted; only the active one is visible, so
           switching tabs is instant and keeps state, scroll, and live data. */}
@@ -560,9 +646,9 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         <View style={[styles.tabPage, activeTab !== 'profile' && styles.tabPageHidden]}>
           <ProfileScreen
             embedded
-            onLogout={onLogout}
             onItemPress={handleItemPress}
             onEditListing={handleEditListing}
+            onOpenSettings={handleOpenSettings}
           />
         </View>
       </View>
@@ -617,7 +703,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#502E82',
-    paddingTop: 64,
+    paddingTop: 60,
     paddingBottom: 20,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 28,
