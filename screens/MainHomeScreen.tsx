@@ -20,15 +20,20 @@ import CreateListingScreen from './CreateListingScreen';
 import ProfileScreen from './ProfileScreen';
 import SavedScreen from './SavedScreen';
 import SettingsScreen from './SettingsScreen';
+import BottomNav from '../components/home/BottomNav';
+import { Listing, Origin, ChatParam } from '../config/types';
+import { Id } from '../convex/_generated/dataModel';
 
 // Peer destinations that share the persistent bottom nav and stay mounted.
+// Everything else (item details, chat, compose, settings) renders as a
+// full-screen overlay on top of the active tab.
 const TAB_SCREENS = ['home', 'saved', 'messagesList', 'profile'];
-// Drill-ins / compose flows that render full-screen over the tab shell.
-const OVERLAY_SCREENS = ['itemDetails', 'chat', 'createListing', 'editListing', 'settings'];
+
+type CategoryChip = { category: string; Icon: React.ComponentType<any>; icon: string };
 
 // Always-visible labeled category chips — replaces the old hamburger circle
 // that hid icon-only category buttons behind a tap.
-const CATEGORY_CHIPS = [
+const CATEGORY_CHIPS: CategoryChip[] = [
   { category: 'All', Icon: Ionicons, icon: 'grid-outline' },
   { category: 'Books', Icon: Ionicons, icon: 'book-outline' },
   { category: 'Electronics', Icon: Ionicons, icon: 'laptop-outline' },
@@ -38,7 +43,13 @@ const CATEGORY_CHIPS = [
   { category: 'Other', Icon: Ionicons, icon: 'cube-outline' },
 ];
 
-export default function MainHomeScreen({ firstName, onLogout, userId }) {
+type Props = {
+  firstName?: string;
+  onLogout: () => void;
+  userId?: Id<'users'>;
+};
+
+export default function MainHomeScreen({ firstName, onLogout, userId }: Props) {
   const insets = useSafeAreaInsets();
   const [searchText, setSearchText] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -49,21 +60,21 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
 
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState('home');
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedChat, setSelectedChat] = useState(null);
+  const [selectedItem, setSelectedItem] = useState<Listing | null>(null);
+  const [selectedChat, setSelectedChat] = useState<ChatParam | null>(null);
 
   // How the active overlay should animate, and (for 'expand') the on-screen
   // rect of the element it was launched from so it can grow out of / collapse
   // back into it. Kept in state so the mounted overlay reads a stable config.
   const [overlayType, setOverlayType] = useState('none');
-  const [overlayOrigin, setOverlayOrigin] = useState(null);
+  const [overlayOrigin, setOverlayOrigin] = useState<Origin | null>(null);
 
   // Overlay close is two-phase so the exit animation can play: a back press
   // flips `overlayClosing`, ContainerTransform runs the reverse animation, then
   // its onClosed fires the queued navigation that actually unmounts it.
   const [overlayClosing, setOverlayClosing] = useState(false);
-  const pendingClose = useRef(null);
-  const requestCloseOverlay = (after) => {
+  const pendingClose = useRef<(() => void) | null>(null);
+  const requestCloseOverlay = (after: () => void) => {
     if (pendingClose.current) return; // already collapsing
     pendingClose.current = after;
     setOverlayClosing(true);
@@ -75,7 +86,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     if (after) after();
   };
 
-  const go = (screen, transition = 'none', origin = null) => {
+  const go = (screen: string, transition = 'none', origin: Origin | null = null) => {
     setOverlayType(transition);
     setOverlayOrigin(origin);
     setCurrentScreen(screen);
@@ -111,7 +122,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const savedIds = useQuery(api.saved.savedIds);
   const savedSet = useMemo(() => new Set(savedIds ?? []), [savedIds]);
   const toggleSave = useMutation(api.saved.toggleSave);
-  const handleToggleSave = (listingId) => {
+  const handleToggleSave = (listingId: Id<'listings'>) => {
     toggleSave({ listingId });
   };
 
@@ -137,7 +148,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   };
   
   // Chips toggle: tapping the selected category deselects back to All
-  const handleCategoryFilterPress = (category) => {
+  const handleCategoryFilterPress = (category: string) => {
     haptics.tap();
     setFilters({
       ...filters,
@@ -146,7 +157,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   };
   
   // Filter function to apply filters to items
-  const filterItems = (items) => {
+  const filterItems = (items: Listing[]) => {
     return items.filter(item => {
       // Category filter
       if (filters.category !== 'All' && item.category !== filters.category) {
@@ -177,7 +188,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
   const filteredRecentlyListed = useMemo(() => filterItems(recentItems), [filters, recentItems]);
   
   // Navigation handlers
-  const handleItemPress = (item, origin = null) => {
+  const handleItemPress = (item: Listing, origin: Origin | null = null) => {
     // Opening details from details (similar items) keeps the original source
     if (currentScreen !== 'itemDetails') {
       setDetailsSource(currentScreen);
@@ -198,7 +209,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     });
   };
 
-  const handleChatWithSeller = (item) => {
+  const handleChatWithSeller = (item: Listing) => {
     setSelectedItem(item);
     // Seller summary comes hydrated on every Convex listing
     const sellerName = item.seller
@@ -215,23 +226,15 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     go('chat', 'push');
   };
 
-  const handleChatPress = (chat) => {
+  const handleChatPress = (chat: ChatParam) => {
     setSelectedChat(chat);
     // Conversations slide in from the right (and back out on return).
     go('chat', 'push');
   };
 
-  // Dismiss an overlay back to the home tab (e.g. closing the compose flow);
-  // chat opened from a listing also returns home.
-  const homeAsTab = () => {
-    requestCloseOverlay(() => {
-      go('home', 'tab');
-      setSelectedItem(null);
-      setSelectedChat(null);
-    });
-  };
-
-  const homeAsPop = () => {
+  // Dismiss an overlay back to the home tab — closing the compose flow, or a
+  // chat that was opened straight from a listing (no message list to pop to).
+  const returnHome = () => {
     requestCloseOverlay(() => {
       go('home', 'tab');
       setSelectedItem(null);
@@ -255,7 +258,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     go('profile');
   };
 
-  const handleEditListing = (listing) => {
+  const handleEditListing = (listing: Listing) => {
     setSelectedItem(listing);
     go('editListing', 'modal');
   };
@@ -281,7 +284,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
 
   const handleListingCreated = () => {
     // Dismissing the sell modal — the reactive feed picks up the new listing
-    homeAsTab();
+    returnHome();
   };
   
   // Tab peers (home, saved, messages, profile) share one persistent bottom
@@ -328,7 +331,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         <ChatScreen
           chat={selectedChat}
           item={selectedItem}
-          onBack={selectedItem ? homeAsPop : handleBackToMessages}
+          onBack={selectedItem ? returnHome : handleBackToMessages}
         />
       </ContainerTransform>
     );
@@ -342,7 +345,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
         style={styles.overlay}
       >
         <CreateListingScreen
-          onBack={homeAsTab}
+          onBack={returnHome}
           onSuccess={handleListingCreated}
         />
       </ContainerTransform>
@@ -376,6 +379,42 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
       </ContainerTransform>
     );
   }
+
+  // One card in a horizontal feed row. Own listings can't be saved, so they
+  // get no heart (undefined onToggleSave hides it).
+  const renderListingCard = ({ item }: { item: Listing }) => (
+    <View style={styles.horizontalCard}>
+      <ListingCard
+        listing={item}
+        onPress={(origin) => handleItemPress(item, origin)}
+        isSaved={savedSet.has(item._id)}
+        onToggleSave={
+          item.sellerId === userId ? undefined : () => handleToggleSave(item._id)
+        }
+      />
+    </View>
+  );
+
+  // A titled horizontal feed row. Renders nothing when the section is empty,
+  // so callers don't repeat the length guard.
+  const renderFeedSection = (title: string, data: Listing[], delay = 0) => {
+    if (data.length === 0) return null;
+    return (
+      <FadeInView style={styles.section} delay={delay}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+        </View>
+        <FlatList
+          data={data}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item._id}
+          renderItem={renderListingCard}
+          contentContainerStyle={styles.horizontalList}
+        />
+      </FadeInView>
+    );
+  };
 
   const renderHome = () => (
     <View style={styles.container}>
@@ -491,95 +530,10 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
           </View>
         ) : (
           <>
-            {/* For You Section (doubles as search results) */}
-        {filteredForYou.length > 0 && (
-          <FadeInView style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{isSearching ? 'Results' : 'For You'}</Text>
-            </View>
-            <FlatList
-              data={filteredForYou}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <View style={styles.horizontalCard}>
-                  <ListingCard
-                    listing={item}
-                    onPress={(origin) => handleItemPress(item, origin)}
-                    isSaved={savedSet.has(item._id)}
-                    onToggleSave={
-                      item.sellerId === userId
-                        ? undefined
-                        : () => handleToggleSave(item._id)
-                    }
-                  />
-                </View>
-              )}
-              contentContainerStyle={styles.horizontalList}
-            />
-          </FadeInView>
-        )}
-
-        {/* Trending Section */}
-        {!isSearching && filteredTrending.length > 0 && (
-          <FadeInView style={styles.section} delay={80}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Trending</Text>
-            </View>
-            <FlatList
-              data={filteredTrending}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <View style={styles.horizontalCard}>
-                  <ListingCard
-                    listing={item}
-                    onPress={(origin) => handleItemPress(item, origin)}
-                    isSaved={savedSet.has(item._id)}
-                    onToggleSave={
-                      item.sellerId === userId
-                        ? undefined
-                        : () => handleToggleSave(item._id)
-                    }
-                  />
-                </View>
-              )}
-              contentContainerStyle={styles.horizontalList}
-            />
-          </FadeInView>
-        )}
-
-        {/* Recently Listed Section */}
-        {!isSearching && filteredRecentlyListed.length > 0 && (
-          <FadeInView style={styles.section} delay={160}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recently Listed</Text>
-            </View>
-            <FlatList
-              data={filteredRecentlyListed}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <View style={styles.horizontalCard}>
-                  <ListingCard
-                    listing={item}
-                    onPress={(origin) => handleItemPress(item, origin)}
-                    isSaved={savedSet.has(item._id)}
-                    onToggleSave={
-                      item.sellerId === userId
-                        ? undefined
-                        : () => handleToggleSave(item._id)
-                    }
-                  />
-                </View>
-              )}
-              contentContainerStyle={styles.horizontalList}
-            />
-          </FadeInView>
-        )}
+            {/* For You doubles as the search results list */}
+            {renderFeedSection(isSearching ? 'Results' : 'For You', filteredForYou)}
+            {!isSearching && renderFeedSection('Trending', filteredTrending, 80)}
+            {!isSearching && renderFeedSection('Recently Listed', filteredRecentlyListed, 160)}
 
         {/* No results message */}
         {filteredForYou.length === 0 && (isSearching || (filteredTrending.length === 0 && filteredRecentlyListed.length === 0)) && (
@@ -613,26 +567,6 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
     </View>
   );
 
-  // One bottom-nav item; the active tab gets the filled icon and brand colour.
-  const renderNavItem = (key, label, activeIcon, inactiveIcon) => {
-    const active = activeTab === key;
-    return (
-      <TouchableOpacity
-        style={styles.navItem}
-        onPress={() => {
-          if (!active) haptics.tap();
-          go(key);
-        }}
-        accessibilityRole="tab"
-        accessibilityLabel={label}
-        accessibilityState={{ selected: active }}
-      >
-        <Ionicons name={active ? activeIcon : inactiveIcon} size={26} color={active ? '#502E82' : '#999999'} />
-        <Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text>
-      </TouchableOpacity>
-    );
-  };
-
   return (
     <View style={styles.shell}>
       {/* Every tab has the purple header and item details now has a dark image
@@ -650,7 +584,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
           <SavedScreen embedded onItemPress={handleItemPress} />
         </View>
         <View style={[styles.tabPage, activeTab !== 'messagesList' && styles.tabPageHidden]}>
-          <MessagesListScreen embedded onBack={homeAsTab} onChatPress={handleChatPress} />
+          <MessagesListScreen embedded onBack={returnHome} onChatPress={handleChatPress} />
         </View>
         <View style={[styles.tabPage, activeTab !== 'profile' && styles.tabPageHidden]}>
           <ProfileScreen
@@ -663,17 +597,7 @@ export default function MainHomeScreen({ firstName, onLogout, userId }) {
       </View>
 
       {/* Persistent bottom navigation — stays put across every tab */}
-      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
-        {renderNavItem('home', 'Home', 'home', 'home-outline')}
-        {renderNavItem('saved', 'Saved', 'heart', 'heart-outline')}
-        <PressableScale style={styles.sellButton} scaleTo={0.88} onPress={handleSellPress}>
-          <View style={styles.addButtonCircle}>
-            <Ionicons name="add" size={32} color="#FFFFFF" />
-          </View>
-        </PressableScale>
-        {renderNavItem('messagesList', 'Messages', 'chatbubble-ellipses', 'chatbubble-ellipses-outline')}
-        {renderNavItem('profile', 'Profile', 'person', 'person-outline')}
-      </View>
+      <BottomNav activeTab={activeTab} onNavigate={go} onSell={handleSellPress} />
 
       {overlay}
     </View>
@@ -843,50 +767,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingBottom: 24,
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    paddingTop: 10,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#F0ECF7',
-  },
-  navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 60,
-  },
-  navLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    color: '#999999',
-    marginTop: 4,
-  },
-  navLabelActive: {
-    color: '#502E82',
-    fontFamily: 'Poppins_500Medium',
-  },
-  sellButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 60,
-    marginTop: -30,
-  },
-  addButtonCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#B39BD5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
   },
   section: {
     marginBottom: 24,

@@ -4,15 +4,23 @@ import { Ionicons } from '@expo/vector-icons';
 import PressableScale from '../ui/PressableScale';
 import { haptics } from '../../config/haptics';
 import { colors, fonts } from '../../config/theme';
+import { Listing, Origin } from '../../config/types';
 
-export default function ListingCard({ listing, onPress, isSaved, onToggleSave }) {
+type Props = {
+  listing: Listing;
+  onPress: (origin: Origin | null) => void;
+  isSaved?: boolean;
+  onToggleSave?: () => void;
+};
+
+export default function ListingCard({ listing, onPress, isSaved, onToggleSave }: Props) {
   // First image URL, resolved server-side from the storage IDs in
   // listing.images. No image → branded placeholder block.
   const imageUrl = listing.imageUrls && listing.imageUrls[0];
 
   // Measure the card's on-screen rect at tap time and hand it up, so the
   // details screen can grow out of exactly this card (container transform).
-  const cardRef = useRef(null);
+  const cardRef = useRef<View>(null);
   const handlePress = () => {
     const node = cardRef.current;
     if (node && typeof node.measureInWindow === 'function') {
@@ -39,7 +47,7 @@ export default function ListingCard({ listing, onPress, isSaved, onToggleSave })
       Animated.spring(heartScale, { toValue: 1.35, speed: 60, bounciness: 12, useNativeDriver: true }),
       Animated.spring(heartScale, { toValue: 1, speed: 40, bounciness: 8, useNativeDriver: true }),
     ]).start();
-    onToggleSave();
+    onToggleSave?.();
   };
 
   return (

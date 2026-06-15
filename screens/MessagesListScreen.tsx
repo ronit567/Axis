@@ -5,10 +5,17 @@ import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { SkeletonChatRow } from '../components/ui/Skeleton';
 import ScreenHeader from '../components/ui/ScreenHeader';
+import { ChatParam, Conversation } from '../config/types';
 
 const TABS = ['All', 'Buying', 'Selling'];
 
-export default function MessagesListScreen({ onBack, onChatPress, embedded }) {
+type Props = {
+  onBack?: () => void;
+  onChatPress: (chat: ChatParam) => void;
+  embedded?: boolean;
+};
+
+export default function MessagesListScreen({ onBack, onChatPress, embedded }: Props) {
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState('All');
 
@@ -19,11 +26,11 @@ export default function MessagesListScreen({ onBack, onChatPress, embedded }) {
   const conversations = conversationsData ?? [];
 
   // Format timestamp
-  const formatTimestamp = (timestamp) => {
+  const formatTimestamp = (timestamp: number | null | undefined) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
     const now = new Date();
-    const diffMs = now - date;
+    const diffMs = now.getTime() - date.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -66,14 +73,14 @@ export default function MessagesListScreen({ onBack, onChatPress, embedded }) {
   const buyingUnread = conversations.filter(c => c.isBuyer).reduce((sum, conv) => sum + (conv.unread || 0), 0);
   const sellingUnread = conversations.filter(c => !c.isBuyer).reduce((sum, conv) => sum + (conv.unread || 0), 0);
 
-  const getTabBadgeCount = (tab) => {
+  const getTabBadgeCount = (tab: string) => {
     if (tab === 'All') return totalUnread;
     if (tab === 'Buying') return buyingUnread;
     if (tab === 'Selling') return sellingUnread;
     return 0;
   };
 
-  const renderChatItem = ({ item }) => {
+  const renderChatItem = ({ item }: { item: Conversation }) => {
     const otherUserName = item.otherUser
       ? `${item.otherUser.firstName || ''} ${item.otherUser.lastName || ''}`.trim() || 'User'
       : 'User';

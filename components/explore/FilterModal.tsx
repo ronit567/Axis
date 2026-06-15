@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Modal, Animated, Easing, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
-import { PRICE_CAP } from './filters';
+import { PRICE_CAP, Filters } from './filters';
 import PressableScale from '../ui/PressableScale';
 import { haptics } from '../../config/haptics';
 
@@ -11,22 +11,50 @@ const { height: SCREEN_H } = Dimensions.get('window');
 const CATEGORIES = ['All', 'Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'];
 const CONDITIONS = ['All', 'Like New', 'Good', 'Fair'];
 
+type Props = {
+  visible: boolean;
+  filters: Filters;
+  onClose: () => void;
+  onUpdateFilters: (filters: Filters) => void;
+  onResetFilters: () => void;
+};
+
 export default function FilterModal({
   visible,
   filters,
   onClose,
   onUpdateFilters,
   onResetFilters,
-}) {
-  const updateFilter = (key, value) => {
+}: Props) {
+  const updateFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => {
     onUpdateFilters({ ...filters, [key]: value });
   };
 
   // Light tap on discrete chip selections (not the continuous sliders).
-  const selectFilter = (key, value) => {
+  const selectFilter = (key: 'category' | 'condition', value: string) => {
     haptics.tap();
     updateFilter(key, value);
   };
+
+  // A single-select row of filter pills bound to one filter key.
+  const renderFilterChips = (filterKey: 'category' | 'condition', options: string[]) => (
+    <View style={styles.filterOptions}>
+      {options.map((option) => {
+        const isSelected = filters[filterKey] === option;
+        return (
+          <Pressable
+            key={option}
+            style={[styles.filterOption, isSelected && styles.filterOptionSelected]}
+            onPress={() => selectFilter(filterKey, option)}
+          >
+            <Text style={[styles.filterOptionText, isSelected && styles.filterOptionTextSelected]}>
+              {option}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 
   // Keep the sheet mounted through its exit so the close animation can play
   // before the native Modal unmounts.
@@ -102,53 +130,13 @@ export default function FilterModal({
             {/* Category Filter */}
             <View style={styles.filterSection}>
               <Text style={styles.filterSectionTitle}>Category</Text>
-              <View style={styles.filterOptions}>
-                {CATEGORIES.map((category) => (
-                  <Pressable
-                    key={category}
-                    style={[
-                      styles.filterOption,
-                      filters.category === category && styles.filterOptionSelected,
-                    ]}
-                    onPress={() => selectFilter('category', category)}
-                  >
-                    <Text
-                      style={[
-                        styles.filterOptionText,
-                        filters.category === category && styles.filterOptionTextSelected,
-                      ]}
-                    >
-                      {category}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              {renderFilterChips('category', CATEGORIES)}
             </View>
 
             {/* Condition Filter */}
             <View style={styles.filterSection}>
               <Text style={styles.filterSectionTitle}>Condition</Text>
-              <View style={styles.filterOptions}>
-                {CONDITIONS.map((condition) => (
-                  <Pressable
-                    key={condition}
-                    style={[
-                      styles.filterOption,
-                      filters.condition === condition && styles.filterOptionSelected,
-                    ]}
-                    onPress={() => selectFilter('condition', condition)}
-                  >
-                    <Text
-                      style={[
-                        styles.filterOptionText,
-                        filters.condition === condition && styles.filterOptionTextSelected,
-                      ]}
-                    >
-                      {condition}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              {renderFilterChips('condition', CONDITIONS)}
             </View>
 
             {/* Price Range Filter */}

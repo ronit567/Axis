@@ -132,7 +132,7 @@ function AppContent() {
     return () => animation.stop();
   }, [currentScreen]);
 
-  const navigate = (screen) => setCurrentScreen(screen);
+  const navigate = (screen: string) => setCurrentScreen(screen);
 
   const navigateToMainHome = () => navigate('mainhome');
 
@@ -156,7 +156,8 @@ function AppContent() {
         });
       } catch (error) {
         console.error('Signup error:', error);
-        const detail = typeof error?.data === 'string' ? error.data : error?.message || '';
+        const e = error as { data?: unknown; message?: string };
+        const detail = typeof e?.data === 'string' ? e.data : e?.message || '';
         if (detail.includes('already exists')) {
           alert('This email is already registered. Please sign in instead.');
         } else if (detail.includes('@uwo.ca')) {

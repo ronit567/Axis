@@ -18,6 +18,16 @@ import { colors, fonts } from '../../config/theme';
  * - `actionLabel`/`onAction` — optional right-aligned text button (e.g. Edit).
  * - `children`     — optional content below the title row (e.g. a search bar).
  */
+type Props = {
+  title: string;
+  badgeCount?: number;
+  onBack?: () => void;
+  embedded?: boolean;
+  actionLabel?: string;
+  onAction?: () => void;
+  children?: React.ReactNode;
+};
+
 export default function ScreenHeader({
   title,
   badgeCount = 0,
@@ -26,7 +36,7 @@ export default function ScreenHeader({
   actionLabel,
   onAction,
   children,
-}) {
+}: Props) {
   const insets = useSafeAreaInsets();
   const showBack = !embedded && onBack;
   return (

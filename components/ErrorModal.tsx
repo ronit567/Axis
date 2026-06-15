@@ -1,10 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  title?: string;
+  message?: string;
+};
+
 /**
  * Error modal component for displaying authentication errors
  */
-export default function ErrorModal({ visible, onClose, title, message }) {
+export default function ErrorModal({ visible, onClose, title, message }: Props) {
   // Card springs up slightly as the backdrop fades in
   const cardScale = useRef(new Animated.Value(0.9)).current;
 

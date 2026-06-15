@@ -1,5 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing } from 'react-native';
+import { Animated, Easing, StyleProp, ViewStyle } from 'react-native';
+
+type Props = {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  delay?: number;
+  slideFrom?: number;
+  duration?: number;
+};
 
 /**
  * Fades + slides its children in on mount. Wrap a screen (style={{flex: 1}})
@@ -7,7 +15,7 @@ import { Animated, Easing } from 'react-native';
  * content reveals. Give it a `key` that changes (e.g. the screen name) to
  * replay the animation on navigation.
  */
-export default function FadeInView({ children, style, delay = 0, slideFrom = 14, duration = 280 }) {
+export default function FadeInView({ children, style, delay = 0, slideFrom = 14, duration = 280 }: Props) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

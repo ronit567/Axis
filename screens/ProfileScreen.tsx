@@ -3,17 +3,13 @@ import {
   StyleSheet,
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   Image,
   Alert,
-  ActivityIndicator,
   Animated,
   Easing,
   Dimensions,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -21,20 +17,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Skeleton } from '../components/ui/Skeleton';
+import EditProfileForm from '../components/profile/EditProfileForm';
+import { Listing, ItemPressHandler, ProfileForm } from '../config/types';
 
 // The white sheet should always reach past the fold so the page reads as one
 // surface rising over the banner — no purple gap underneath a short list.
 const SHEET_MIN_HEIGHT = Dimensions.get('window').height - 200;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOpenSettings, embedded }) {
+type Props = {
+  onBack?: () => void;
+  onEditListing?: (listing: Listing) => void;
+  onItemPress?: ItemPressHandler;
+  onOpenSettings?: () => void;
+  embedded?: boolean;
+};
+
+export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOpenSettings, embedded }: Props) {
   const insets = useSafeAreaInsets();
   const profile = useQuery(api.users.current);
 
   // One ref per listing row so a tap can measure its rect and let item details
   // grow out of it (container transform), matching the home/saved feeds.
-  const rowRefs = useRef({});
-  const openListing = (listing) => {
+  const rowRefs = useRef<Record<string, View | null>>({});
+  const openListing = (listing: Listing) => {
     if (!onItemPress) return;
     const node = rowRefs.current[listing._id];
     if (node && typeof node.measureInWindow === 'function') {
@@ -54,7 +60,7 @@ export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOp
   const [editMounted, setEditMounted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [form, setForm] = useState(null);
+  const [form, setForm] = useState<ProfileForm | null>(null);
 
   // 0 = profile, 1 = edit. Tapping Edit Profile slides the edit layer in from
   // the right (and back out) like the app's other drill-ins.
@@ -99,6 +105,7 @@ export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOp
   };
 
   const saveProfile = async () => {
+    if (!form) return;
     if (!form.firstName.trim()) {
       Alert.alert('Required', 'Please enter your first name.');
       return;
@@ -157,14 +164,14 @@ export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOp
     setIsUploadingAvatar(false);
   };
 
-  const handleMarkSold = (listing) => {
+  const handleMarkSold = (listing: Listing) => {
     Alert.alert('Mark as Sold', `Mark "${listing.title}" as sold?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Mark Sold', onPress: () => markSold({ id: listing._id }) },
     ]);
   };
 
-  const handleDelete = (listing) => {
+  const handleDelete = (listing: Listing) => {
     Alert.alert('Delete Listing', `Delete "${listing.title}"? This can't be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -206,132 +213,19 @@ export default function ProfileScreen({ onBack, onEditListing, onItemPress, onOp
     inputRange: [0, 1],
     outputRange: [SCREEN_WIDTH, 0],
   });
-  const editLayer = editMounted ? (
-    <Animated.View
-      style={[
-        StyleSheet.absoluteFill,
-        styles.editContainer,
-        { transform: [{ translateX: editSlide }] },
-      ]}
-    >
-        <View style={[styles.editBanner, { paddingTop: insets.top + 12 }]}>
-          <View style={styles.bannerTopRow}>
-            <View style={styles.bannerSpacer} />
-            <TouchableOpacity
-              onPress={closeEdit}
-              hitSlop={8}
-              accessibilityLabel="Cancel"
-            >
-              <Text style={styles.bannerAction}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.editIdentityRow}>
-            <TouchableOpacity
-              style={styles.avatarContainerSm}
-              onPress={changeAvatar}
-              disabled={isUploadingAvatar}
-            >
-              {profile?.avatarUrl ? (
-                <Image source={{ uri: profile.avatarUrl }} style={styles.avatarSm} />
-              ) : (
-                <View style={[styles.avatarSm, styles.avatarPlaceholder]}>
-                  <Ionicons name="person" size={30} color="#B39BD5" />
-                </View>
-              )}
-              <View style={styles.avatarBadgeSm}>
-                {isUploadingAvatar ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Ionicons name="camera" size={12} color="#FFFFFF" />
-                )}
-              </View>
-            </TouchableOpacity>
-            <View style={styles.editIdentityInfo}>
-              <Text style={styles.editName} numberOfLines={1}>{editName}</Text>
-              <Text style={styles.editEmail} numberOfLines={1}>{profile?.email}</Text>
-              <Text style={styles.editHint}>Tap the photo to change it</Text>
-            </View>
-          </View>
-        </View>
-
-        <KeyboardAvoidingView
-          style={styles.editFormFlex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <ScrollView
-            style={styles.editFormFlex}
-            contentContainerStyle={styles.editScrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.fieldRow}>
-              <View style={styles.fieldHalf}>
-                <Text style={styles.label}>First Name *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={form.firstName}
-                  onChangeText={(v) => setForm({ ...form, firstName: v })}
-                  placeholder="First name"
-                  placeholderTextColor="#999"
-                  maxLength={50}
-                />
-              </View>
-              <View style={styles.fieldHalf}>
-                <Text style={styles.label}>Last Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={form.lastName}
-                  onChangeText={(v) => setForm({ ...form, lastName: v })}
-                  placeholder="Last name"
-                  placeholderTextColor="#999"
-                  maxLength={50}
-                />
-              </View>
-            </View>
-            <Text style={styles.label}>Program</Text>
-            <TextInput
-              style={styles.input}
-              value={form.program}
-              onChangeText={(v) => setForm({ ...form, program: v })}
-              placeholder="e.g., Computer Science"
-              placeholderTextColor="#999"
-              maxLength={100}
-            />
-            <Text style={styles.label}>Year of Study</Text>
-            <TextInput
-              style={styles.input}
-              value={form.yearOfStudy}
-              onChangeText={(v) => setForm({ ...form, yearOfStudy: v })}
-              placeholder="e.g., 2"
-              placeholderTextColor="#999"
-              maxLength={20}
-            />
-            <Text style={styles.label}>About You</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={form.bio}
-              onChangeText={(v) => setForm({ ...form, bio: v })}
-              placeholder="A few words about yourself"
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              maxLength={300}
-            />
-            <TouchableOpacity
-              style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-              onPress={saveProfile}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
-    </Animated.View>
+  const editLayer = editMounted && form && profile ? (
+    <EditProfileForm
+      form={form}
+      setForm={setForm}
+      profile={profile}
+      isSaving={isSaving}
+      isUploadingAvatar={isUploadingAvatar}
+      editName={editName}
+      editSlide={editSlide}
+      onChangeAvatar={changeAvatar}
+      onCancel={closeEdit}
+      onSave={saveProfile}
+    />
   ) : null;
 
   return (
@@ -521,76 +415,6 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
-  // ---- Edit mode: pinned compact header + scrolling form ----
-  editContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  editBanner: {
-    backgroundColor: '#502E82',
-    paddingBottom: 22,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-  },
-  editIdentityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  avatarContainerSm: {
-    position: 'relative',
-    marginRight: 16,
-  },
-  avatarSm: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-  },
-  avatarBadgeSm: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#B39BD5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#502E82',
-  },
-  editIdentityInfo: {
-    flex: 1,
-  },
-  editName: {
-    fontSize: 18,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
-  },
-  editEmail: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: '#C9B8E4',
-    marginTop: 1,
-  },
-  editHint: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    color: '#E2D6F5',
-    marginTop: 5,
-  },
-  editFormFlex: {
-    flex: 1,
-  },
-  editScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 120,
-  },
   scrollContent: {
     // Lets the sheet's tall minHeight push the page past the fold for scroll
     // room without leaving purple showing underneath.
@@ -625,11 +449,6 @@ const styles = StyleSheet.create({
   },
   bannerSpacer: {
     flex: 1,
-  },
-  bannerAction: {
-    fontSize: 15,
-    fontFamily: 'Poppins_500Medium',
-    color: '#FFFFFF',
   },
   statsRow: {
     flexDirection: 'row',
@@ -751,50 +570,6 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
     marginTop: 12,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  fieldHalf: {
-    flex: 1,
-  },
-  label: {
-    fontSize: 14,
-    fontFamily: 'Poppins_500Medium',
-    color: '#333333',
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  input: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    fontFamily: 'Poppins_400Regular',
-    color: '#333333',
-    marginBottom: 12,
-  },
-  textArea: {
-    minHeight: 80,
-    paddingTop: 14,
-  },
-  saveButton: {
-    backgroundColor: '#502E82',
-    borderRadius: 25,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#B39BD5',
-  },
-  saveButtonText: {
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
   },
   listingsSection: {
     paddingHorizontal: 20,

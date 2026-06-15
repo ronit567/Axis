@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  Dimensions,
   Share,
   Alert,
   ActivityIndicator
@@ -17,12 +16,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { haptics } from '../config/haptics';
+import ImageGallery from '../components/details/ImageGallery';
+import TipsCard, { SAFETY_TIPS, SELLER_TIPS } from '../components/details/TipsCard';
+import { Listing, ItemPressHandler } from '../config/types';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+type Props = {
+  item: Listing;
+  onBack: () => void;
+  onChatWithSeller: (item: Listing) => void;
+  onItemPress: ItemPressHandler;
+  onEditListing?: (item: Listing) => void;
+};
 
-export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onItemPress, onEditListing }) {
+export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onItemPress, onEditListing }: Props) {
   const insets = useSafeAreaInsets();
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Get images from item or use placeholder
   const images = item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls : [null];
@@ -54,7 +61,7 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
     if (!item._creationTime) return 'Recently';
     const created = new Date(item._creationTime);
     const now = new Date();
-    const diffMs = now - created;
+    const diffMs = now.getTime() - created.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
@@ -135,11 +142,6 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
     }
   };
 
-  const handleImageScroll = (event) => {
-    const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-    setCurrentImageIndex(index);
-  };
-
   // Get seller display name
   const sellerName = sellerProfile
     ? `${sellerProfile.firstName || ''} ${sellerProfile.lastName || ''}`.trim() || 'Seller'
@@ -207,61 +209,7 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Image Gallery */}
-        <View style={styles.imageGallery}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={handleImageScroll}
-            scrollEventThrottle={16}
-          >
-            {images.map((imageUrl, index) => (
-              <View key={index} style={styles.imageContainer}>
-                {imageUrl ? (
-                  <Image
-                    source={{ uri: imageUrl }}
-                    style={styles.itemImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[styles.itemImage, styles.imageMissing]}>
-                    <Ionicons name="image-outline" size={48} color="#B39BD5" />
-                    <Text style={styles.imageMissingText}>No photos yet</Text>
-                  </View>
-                )}
-              </View>
-            ))}
-          </ScrollView>
-
-          {/* Image Pagination Dots */}
-          <View style={styles.paginationDots}>
-            {images.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  currentImageIndex === index && styles.activeDot
-                ]}
-              />
-            ))}
-          </View>
-
-          {/* Image Counter */}
-          <View style={styles.imageCounter}>
-            <Text style={styles.imageCounterText}>
-              {currentImageIndex + 1}/{images.length}
-            </Text>
-          </View>
-
-          {/* Owner Badge */}
-          {isOwner && (
-            <View style={styles.ownerBadge}>
-              <Ionicons name="person-circle" size={14} color="#FFFFFF" />
-              <Text style={styles.ownerBadgeText}>Your Listing</Text>
-            </View>
-          )}
-        </View>
+        <ImageGallery images={images} isOwner={isOwner} />
 
         {/* Item Info */}
         <View style={styles.infoSection}>
@@ -383,52 +331,24 @@ export default function ItemDetailsScreen({ item, onBack, onChatWithSeller, onIt
             </View>
           )}
 
-          {/* Safety Tips - Only show if not owner */}
+          {/* Safety tips for buyers, selling tips for the owner */}
           {!isOwner && (
-            <View style={styles.safetySection}>
-              <View style={styles.safetyHeader}>
-                <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
-                <Text style={styles.safetyTitle}>Safety Tips</Text>
-              </View>
-              <View style={styles.safetyTips}>
-                <View style={styles.safetyTip}>
-                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                  <Text style={styles.safetyTipText}>Meet in public places on campus</Text>
-                </View>
-                <View style={styles.safetyTip}>
-                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                  <Text style={styles.safetyTipText}>Inspect items before paying</Text>
-                </View>
-                <View style={styles.safetyTip}>
-                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                  <Text style={styles.safetyTipText}>Use secure payment methods</Text>
-                </View>
-              </View>
-            </View>
+            <TipsCard
+              title="Safety Tips"
+              icon="shield-checkmark"
+              accent="#4CAF50"
+              backgroundColor="#F0FFF4"
+              tips={SAFETY_TIPS}
+            />
           )}
-
-          {/* Seller Tips - Only show if owner */}
           {isOwner && (
-            <View style={styles.sellerTipsSection}>
-              <View style={styles.sellerTipsHeader}>
-                <Ionicons name="bulb" size={20} color="#FF9800" />
-                <Text style={styles.sellerTipsTitle}>Seller Tips</Text>
-              </View>
-              <View style={styles.sellerTips}>
-                <View style={styles.sellerTip}>
-                  <Ionicons name="camera" size={16} color="#FF9800" />
-                  <Text style={styles.sellerTipText}>Add more photos to increase interest</Text>
-                </View>
-                <View style={styles.sellerTip}>
-                  <Ionicons name="pricetag" size={16} color="#FF9800" />
-                  <Text style={styles.sellerTipText}>Consider lowering price if no inquiries</Text>
-                </View>
-                <View style={styles.sellerTip}>
-                  <Ionicons name="chatbubble" size={16} color="#FF9800" />
-                  <Text style={styles.sellerTipText}>Respond quickly to buyers for better sales</Text>
-                </View>
-              </View>
-            </View>
+            <TipsCard
+              title="Seller Tips"
+              icon="bulb"
+              accent="#FF9800"
+              backgroundColor="#FFF8E1"
+              tips={SELLER_TIPS}
+            />
           )}
 
           {/* Similar Items */}
@@ -546,68 +466,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  imageGallery: {
-    position: 'relative',
-  },
-  imageContainer: {
-    width: SCREEN_WIDTH,
-    height: 300,
-    backgroundColor: '#F0F0F0',
-  },
-  itemImage: {
-    width: '100%',
-    height: '100%',
-  },
-  paginationDots: {
-    position: 'absolute',
-    bottom: 16,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  activeDot: {
-    backgroundColor: '#FFFFFF',
-    width: 24,
-  },
-  imageCounter: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  imageCounterText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Poppins_500Medium',
-  },
-  ownerBadge: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#502E82',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  ownerBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Poppins_600SemiBold',
   },
   infoSection: {
     padding: 20,
@@ -743,12 +601,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  imageMissingText: {
-    marginTop: 8,
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: '#9B91A8',
-  },
   meetupSection: {
     marginBottom: 24,
   },
@@ -819,66 +671,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Poppins_400Regular',
     color: '#999999',
-  },
-  safetySection: {
-    marginBottom: 24,
-    backgroundColor: '#F0FFF4',
-    borderRadius: 12,
-    padding: 16,
-  },
-  safetyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  safetyTitle: {
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
-  },
-  safetyTips: {
-    gap: 8,
-  },
-  safetyTip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  safetyTipText: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: '#666666',
-  },
-  sellerTipsSection: {
-    marginBottom: 24,
-    backgroundColor: '#FFF8E1',
-    borderRadius: 12,
-    padding: 16,
-  },
-  sellerTipsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  sellerTipsTitle: {
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#333333',
-  },
-  sellerTips: {
-    gap: 8,
-  },
-  sellerTip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sellerTipText: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: '#666666',
   },
   similarSection: {
     marginBottom: 24,

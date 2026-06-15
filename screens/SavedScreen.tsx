@@ -12,8 +12,15 @@ import ListingCard from '../components/explore/ListingCard';
 import FadeInView from '../components/ui/FadeInView';
 import ScreenHeader from '../components/ui/ScreenHeader';
 import { SkeletonListingCard } from '../components/ui/Skeleton';
+import { Listing, Origin } from '../config/types';
 
-export default function SavedScreen({ onBack, onItemPress, embedded }) {
+type Props = {
+  onBack?: () => void;
+  onItemPress?: (item: Listing, origin: Origin | null) => void;
+  embedded?: boolean;
+};
+
+export default function SavedScreen({ onBack, onItemPress, embedded }: Props) {
   // Reactive: unsaving from here (or anywhere) drops the card immediately.
   const saved = useQuery(api.saved.listSaved);
   const toggleSave = useMutation(api.saved.toggleSave);

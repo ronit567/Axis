@@ -1,12 +1,21 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, View, StyleSheet } from 'react-native';
+import { Animated, View, StyleSheet, StyleProp, ViewStyle, DimensionValue } from 'react-native';
+
+type SkeletonProps = {
+  width: DimensionValue;
+  height: DimensionValue;
+  borderRadius?: number;
+  style?: StyleProp<ViewStyle>;
+};
+
+type WrapperProps = { style?: StyleProp<ViewStyle> };
 
 /**
  * Brand-tinted pulsing placeholder block. Compose into screen-specific
  * skeletons so loading states preview the layout instead of showing a
  * bare spinner.
  */
-export function Skeleton({ width, height, borderRadius = 8, style }) {
+export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonProps) {
   const pulse = useRef(new Animated.Value(0.45)).current;
 
   useEffect(() => {
@@ -28,7 +37,7 @@ export function Skeleton({ width, height, borderRadius = 8, style }) {
 }
 
 /** Mirrors ListingCard's layout: image, title, price, meta row. */
-export function SkeletonListingCard({ style }) {
+export function SkeletonListingCard({ style }: WrapperProps) {
   return (
     <View style={[styles.card, style]}>
       <Skeleton width="100%" height={140} borderRadius={0} />
@@ -45,7 +54,7 @@ export function SkeletonListingCard({ style }) {
 }
 
 /** Mirrors a conversation row: thumbnail + two lines + timestamp. */
-export function SkeletonChatRow({ style }) {
+export function SkeletonChatRow({ style }: WrapperProps) {
   return (
     <View style={[styles.chatRow, style]}>
       <Skeleton width={56} height={56} borderRadius={12} />
@@ -59,7 +68,7 @@ export function SkeletonChatRow({ style }) {
 }
 
 /** A horizontal feed section: title bar + row of listing cards. */
-export function SkeletonFeedSection({ style }) {
+export function SkeletonFeedSection({ style }: WrapperProps) {
   return (
     <View style={style}>
       <Skeleton width={110} height={18} style={styles.sectionTitle} />

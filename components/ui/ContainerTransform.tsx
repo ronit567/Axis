@@ -1,7 +1,20 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Dimensions } from 'react-native';
+import { Animated, Easing, Dimensions, StyleProp, ViewStyle } from 'react-native';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+type Origin = { x: number; y: number; width: number; height: number };
+
+type Props = {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  // Driven by the home screen's dynamic nav state; only 'expand' | 'modal' |
+  // 'push' animate, anything else (e.g. 'none'/'tab') renders in place.
+  type?: string;
+  origin?: Origin | null;
+  closing?: boolean;
+  onClosed?: () => void;
+};
 
 const ENTER_DURATION = 340;
 const EXIT_DURATION = 260;
@@ -31,7 +44,7 @@ export default function ContainerTransform({
   origin = null,
   closing = false,
   onClosed,
-}) {
+}: Props) {
   // Capture the entry config once. While closing, the parent may change its
   // nav state (and thus these props); freezing them keeps the exit animating
   // from the same geometry it entered with, never flipping direction mid-flight.
@@ -70,11 +83,11 @@ export default function ContainerTransform({
   }
 
   const expanding = cfg.type === 'expand' && cfg.origin;
-  let transform = [];
-  let opacity = 1;
+  let transform: any[] = [];
+  let opacity: number | Animated.AnimatedInterpolation<string | number> = 1;
 
   if (expanding) {
-    const { x, y, width, height } = cfg.origin;
+    const { x, y, width, height } = cfg.origin!;
     const centerX = x + width / 2;
     const centerY = y + height / 2;
     // Scale is about the view's own centre, so translating the centre onto the

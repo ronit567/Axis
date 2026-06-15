@@ -13,6 +13,6 @@ import { ConvexReactClient } from "convex/react";
  * can call `convex.query(...)` / `convex.mutation(...)` directly.
  */
 export const convex = new ConvexReactClient(
-  process.env.EXPO_PUBLIC_CONVEX_URL,
+  process.env.EXPO_PUBLIC_CONVEX_URL as string,
   { unsavedChangesWarning: false },
 );

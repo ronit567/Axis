@@ -3,7 +3,14 @@
 // everything above it — Bug 4).
 export const PRICE_CAP = 1000;
 
-export const DEFAULT_FILTERS = {
+export type Filters = {
+  category: string;
+  condition: string;
+  minPrice: number;
+  maxPrice: number;
+};
+
+export const DEFAULT_FILTERS: Filters = {
   category: 'All',
   condition: 'All',
   minPrice: 0,

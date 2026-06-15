@@ -3,13 +3,13 @@
 // no-op instead of throwing.
 import * as Haptics from 'expo-haptics';
 
-const safe = (fn) => {
+function safe(fn: () => void): void {
   try {
     fn();
-  } catch (e) {
+  } catch {
     // Haptics are non-essential; never let them break an interaction.
   }
-};
+}
 
 export const haptics = {
   // Light tap — selection changes, tab switches, toggles.

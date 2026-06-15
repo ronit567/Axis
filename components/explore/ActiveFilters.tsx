@@ -1,13 +1,20 @@
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PRICE_CAP } from './filters';
+import { PRICE_CAP, Filters } from './filters';
+
+type Props = {
+  filters: Filters;
+  onUpdateFilters: (filters: Filters) => void;
+  onResetFilters: () => void;
+  hideCategory?: boolean;
+};
 
 export default function ActiveFilters({
   filters,
   onUpdateFilters,
   onResetFilters,
   hideCategory = false,
-}) {
+}: Props) {
   const showCategory = !hideCategory && filters.category !== 'All';
   const showCondition = filters.condition !== 'All';
   const showPrice = filters.minPrice > 0 || filters.maxPrice < PRICE_CAP;

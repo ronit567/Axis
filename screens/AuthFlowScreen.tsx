@@ -13,6 +13,7 @@ import {
   Platform,
   ActivityIndicator,
   Pressable,
+  TextInputProps,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthActions } from '@convex-dev/auth/react';
@@ -23,8 +24,25 @@ import EmailValidationModal from '../components/EmailValidationModal';
 import FadeInView from '../components/ui/FadeInView';
 import PressableScale from '../components/ui/PressableScale';
 
+type Setter = (value: string) => void;
+
+type AuthFlowProps = {
+  email: string; setEmail: Setter;
+  password: string; setPassword: Setter;
+  firstName: string; setFirstName: Setter;
+  lastName: string; setLastName: Setter;
+  confirmPassword: string; setConfirmPassword: Setter;
+  program: string; setProgram: Setter;
+  yearOfStudy: string; setYearOfStudy: Setter;
+  socials: string; setSocials: Setter;
+  aboutYou: string; setAboutYou: Setter;
+  isSigningUp: boolean;
+  onSignedIn: () => void;
+  onCompleteSignUp: () => void;
+};
+
 // UX-only pre-check; the real gate is server-side in convex/auth.ts.
-const isValidSchoolEmail = (email) => /^[A-Za-z0-9._%+-]+@uwo\.ca$/i.test(email.trim());
+const isValidSchoolEmail = (email: string) => /^[A-Za-z0-9._%+-]+@uwo\.ca$/i.test(email.trim());
 
 // How far the hero (purple header + logo circle) travels between the
 // welcome layout and the compact form layout. The wordmark fades out
@@ -42,8 +60,14 @@ const KB_HEADER_SHIFT = -110;
 const KB_LOGO_SHIFT = -80;
 const KB_FORM_SHIFT = -175;
 
+type FieldProps = TextInputProps & {
+  label: string;
+  secure?: boolean;
+  half?: boolean;
+};
+
 /** Filled input with label, focus ring, and optional show/hide for passwords. */
-function Field({ label, secure, half, ...inputProps }) {
+function Field({ label, secure, half, ...inputProps }: FieldProps) {
   const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
   return (
@@ -73,7 +97,7 @@ function Field({ label, secure, half, ...inputProps }) {
 }
 
 /** Two-segment progress bar for the sign-up steps. */
-function StepDots({ step }) {
+function StepDots({ step }: { step: number }) {
   return (
     <View style={styles.stepRow}>
       <View style={[styles.stepSegment, styles.stepSegmentActive]} />
@@ -96,12 +120,12 @@ export default function AuthFlowScreen({
   isSigningUp,
   onSignedIn,
   onCompleteSignUp,
-}) {
+}: AuthFlowProps) {
   const { signIn } = useAuthActions();
 
   // welcome | signin | signup | profileSetup — one screen, so the hero
   // pieces persist and animate between layouts instead of being remounted.
-  const [mode, setMode] = useState('welcome');
+  const [mode, setMode] = useState<'welcome' | 'signin' | 'signup' | 'profileSetup'>('welcome');
   const isCompact = mode !== 'welcome';
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -109,7 +133,7 @@ export default function AuthFlowScreen({
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const showError = (message) => {
+  const showError = (message: string) => {
     setErrorMessage(message);
     setShowErrorModal(true);
   };
@@ -135,7 +159,7 @@ export default function AuthFlowScreen({
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const animateKb = (toValue) =>
+    const animateKb = (toValue: number) =>
       Animated.timing(kb, {
         toValue,
         duration: 260,

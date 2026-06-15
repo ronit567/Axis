@@ -1,7 +1,12 @@
 import React, { useRef, forwardRef } from 'react';
-import { Animated, Pressable } from 'react-native';
+import { Animated, Pressable, View, PressableProps, StyleProp, ViewStyle } from 'react-native';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+type Props = PressableProps & {
+  scaleTo?: number;
+  style?: StyleProp<ViewStyle>;
+};
 
 /**
  * Pressable with a springy scale-down on touch — makes cards and buttons
@@ -9,13 +14,13 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
  * passed style keeps its layout semantics (flex, margins, shadows). The ref
  * reaches the underlying view (e.g. for measureInWindow).
  */
-const PressableScale = forwardRef(function PressableScale(
+const PressableScale = forwardRef<View, Props>(function PressableScale(
   { children, style, scaleTo = 0.96, ...rest },
   ref
 ) {
   const scale = useRef(new Animated.Value(1)).current;
 
-  const animateTo = (toValue) =>
+  const animateTo = (toValue: number) =>
     Animated.spring(scale, {
       toValue,
       useNativeDriver: true,

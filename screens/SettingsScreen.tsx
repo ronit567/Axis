@@ -11,10 +11,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import ScreenHeader from '../components/ui/ScreenHeader';
+import { UserProfile } from '../config/types';
+
+type SettingsRow = {
+  key: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  valueKey?: 'email' | 'phone';
+};
+type SettingsSection = { title: string; rows: SettingsRow[] };
 
 // Each row is a single setting; `value` shows a trailing summary (e.g. the
 // signed-in email) and a missing `onPress` marks a not-yet-built placeholder.
-const SECTIONS = [
+const SECTIONS: SettingsSection[] = [
   {
     title: 'Account',
     rows: [
@@ -33,7 +42,12 @@ const SECTIONS = [
   },
 ];
 
-export default function SettingsScreen({ onBack, onLogout }) {
+type Props = {
+  onBack?: () => void;
+  onLogout: () => void;
+};
+
+export default function SettingsScreen({ onBack, onLogout }: Props) {
   const profile = useQuery(api.users.current);
 
   const handleLogout = () => {
@@ -44,7 +58,7 @@ export default function SettingsScreen({ onBack, onLogout }) {
   };
 
   // Placeholder rows aren't wired up yet — say so rather than dead-tapping.
-  const comingSoon = (label) =>
+  const comingSoon = (label: string) =>
     Alert.alert(label, 'This feature is coming soon.');
 
   return (

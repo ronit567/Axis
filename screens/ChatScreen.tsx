@@ -19,6 +19,14 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Skeleton } from '../components/ui/Skeleton';
 import { haptics } from '../config/haptics';
+import { ChatParam, Listing, Message } from '../config/types';
+import { Id } from '../convex/_generated/dataModel';
+
+type Props = {
+  chat: ChatParam | null;
+  item: Listing | null;
+  onBack: () => void;
+};
 
 const BUYER_QUICK_REPLIES = [
   "Is this still available?",
@@ -32,14 +40,16 @@ const SELLER_QUICK_REPLIES = [
   "I can do a small discount",
 ];
 
-export default function ChatScreen({ chat, item, onBack }) {
+export default function ChatScreen({ chat, item, onBack }: Props) {
   const insets = useSafeAreaInsets();
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
-  const [conversationId, setConversationId] = useState(chat?.conversationId || null);
+  const [conversationId, setConversationId] = useState<Id<'conversations'> | null>(
+    chat?.conversationId || null,
+  );
   const isBuyer = chat?.isBuyer ?? true;
-  const flatListRef = useRef(null);
+  const flatListRef = useRef<FlatList>(null);
 
   const me = useQuery(api.users.current);
   const currentUserId = me?._id;
@@ -94,7 +104,7 @@ export default function ChatScreen({ chat, item, onBack }) {
   }, [messages.length]);
 
   // Format timestamp
-  const formatTimestamp = (timestamp) => {
+  const formatTimestamp = (timestamp: number) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', {
@@ -103,7 +113,7 @@ export default function ChatScreen({ chat, item, onBack }) {
     });
   };
 
-  const handleSend = useCallback(async (text = inputText) => {
+  const handleSend = useCallback(async (text: string = inputText) => {
     if (text.trim() === '' || isSending) return;
 
     const messageText = text.trim();
@@ -147,7 +157,7 @@ export default function ChatScreen({ chat, item, onBack }) {
     }
   }, [inputText, isSending, conversationId, item, chat?.sellerId, chat?.listingId]);
 
-  const handleQuickReply = (reply) => {
+  const handleQuickReply = (reply: string) => {
     handleSend(reply);
   };
 
@@ -161,8 +171,8 @@ export default function ChatScreen({ chat, item, onBack }) {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Send Offer',
-          onPress: (value) => {
-            if (value && !isNaN(value)) {
+          onPress: (value?: string) => {
+            if (value && !isNaN(Number(value))) {
               handleSend(`I'd like to offer $${value} for this item. Let me know if that works!`);
             }
           }
@@ -199,7 +209,7 @@ export default function ChatScreen({ chat, item, onBack }) {
     );
   };
 
-  const renderMessage = ({ item: msg, index }) => {
+  const renderMessage = ({ item: msg, index }: { item: Message; index: number }) => {
     const isUser = msg.senderId === currentUserId;
     const isLastMessage = index === messages.length - 1;
 

@@ -19,12 +19,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { haptics } from '../config/haptics';
+import { Listing } from '../config/types';
+import { Id } from '../convex/_generated/dataModel';
 
-const CATEGORIES = ['Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'];
-const CONDITIONS = ['Like New', 'Good', 'Fair'];
+type Category = 'Books' | 'Electronics' | 'Furniture' | 'Clothing' | 'Appliances' | 'Other';
+type Condition = 'Like New' | 'Good' | 'Fair';
+// An image in the form: existing ones keep their storage ID, fresh picks have
+// only a local uri until they upload on submit.
+type ListingImage = { uri?: string; storageId?: Id<'_storage'> };
+
+type Props = {
+  onBack: () => void;
+  onSuccess: (listingId?: Id<'listings'>) => void;
+  listing?: Listing;
+};
+
+const CATEGORIES: Category[] = ['Books', 'Electronics', 'Furniture', 'Clothing', 'Appliances', 'Other'];
+const CONDITIONS: Condition[] = ['Like New', 'Good', 'Fair'];
 
 // Pass a `listing` (hydrated, with imageUrls) to edit it instead of creating.
-export default function CreateListingScreen({ onBack, onSuccess, listing }) {
+export default function CreateListingScreen({ onBack, onSuccess, listing }: Props) {
   const insets = useSafeAreaInsets();
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const createListing = useMutation(api.listings.create);
@@ -33,16 +47,16 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
   const [title, setTitle] = useState(listing?.title ?? '');
   const [description, setDescription] = useState(listing?.description ?? '');
   const [price, setPrice] = useState(listing ? String(listing.price) : '');
-  const [category, setCategory] = useState(listing?.category ?? '');
-  const [condition, setCondition] = useState(listing?.condition ?? '');
+  const [category, setCategory] = useState<Category | ''>(listing?.category ?? '');
+  const [condition, setCondition] = useState<Condition | ''>(listing?.condition ?? '');
   const [meetupLocation, setMeetupLocation] = useState(listing?.meetupLocation ?? '');
   const [meetupAvailability, setMeetupAvailability] = useState(listing?.meetupAvailability ?? '');
   // Each image: { uri, storageId? } — existing images keep their storage ID
   // and are never re-uploaded; new picks upload on submit.
-  const [images, setImages] = useState(() =>
+  const [images, setImages] = useState<ListingImage[]>(() =>
     listing
       ? listing.images
-          .map((storageId, i) => ({ storageId, uri: listing.imageUrls?.[i] }))
+          .map((storageId, i) => ({ storageId, uri: listing.imageUrls?.[i] ?? undefined }))
           .filter((img) => img.uri)
       : [],
   );
@@ -95,7 +109,7 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
     }
   };
 
-  const removeImage = (index) => {
+  const removeImage = (index: number) => {
     setImages(images.filter((_, i) => i !== index));
   };
 
@@ -146,12 +160,13 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
       // Upload each image to Convex storage: get a one-time upload URL, POST
       // the file bytes, keep the returned storage ID for the listing.
       // Existing images (edit mode) already have a storage ID and are skipped.
-      const storageIds = [];
+      const storageIds: Id<'_storage'>[] = [];
       for (const img of images) {
         if (img.storageId) {
           storageIds.push(img.storageId);
           continue;
         }
+        if (!img.uri) continue;
         const uploadUrl = await generateUploadUrl();
         const file = await fetch(img.uri);
         const blob = await file.blob();
@@ -171,14 +186,15 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
         title: title.trim(),
         description: description.trim() || undefined,
         price: parseFloat(price),
-        category,
-        condition,
+        // validateForm guarantees these are set before we reach here.
+        category: category as Category,
+        condition: condition as Condition,
         images: storageIds,
         meetupLocation: meetupLocation.trim() || undefined,
         meetupAvailability: meetupAvailability.trim() || undefined,
       };
 
-      let listingId;
+      let listingId: Id<'listings'> | undefined;
       if (isEditing) {
         await updateListing({ id: listing._id, ...fields });
         listingId = listing._id;
@@ -198,6 +214,30 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
 
     setIsLoading(false);
   };
+
+  // A single-select row of pill buttons (used for both Category and Condition).
+  const renderChips = <T extends string>(
+    options: T[],
+    selected: T | '',
+    onSelect: (value: T) => void,
+  ) => (
+    <View style={styles.optionsContainer}>
+      {options.map((option) => {
+        const isSelected = selected === option;
+        return (
+          <TouchableOpacity
+            key={option}
+            style={[styles.optionButton, isSelected && styles.optionButtonSelected]}
+            onPress={() => onSelect(option)}
+          >
+            <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+              {option}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -290,53 +330,13 @@ export default function CreateListingScreen({ onBack, onSuccess, listing }) {
           {/* Category */}
           <View style={styles.section}>
             <Text style={styles.label}>Category *</Text>
-            <View style={styles.optionsContainer}>
-              {CATEGORIES.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[
-                    styles.optionButton,
-                    category === cat && styles.optionButtonSelected,
-                  ]}
-                  onPress={() => setCategory(cat)}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      category === cat && styles.optionTextSelected,
-                    ]}
-                  >
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {renderChips(CATEGORIES, category, setCategory)}
           </View>
 
           {/* Condition */}
           <View style={styles.section}>
             <Text style={styles.label}>Condition *</Text>
-            <View style={styles.optionsContainer}>
-              {CONDITIONS.map((cond) => (
-                <TouchableOpacity
-                  key={cond}
-                  style={[
-                    styles.optionButton,
-                    condition === cond && styles.optionButtonSelected,
-                  ]}
-                  onPress={() => setCondition(cond)}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      condition === cond && styles.optionTextSelected,
-                    ]}
-                  >
-                    {cond}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {renderChips(CONDITIONS, condition, setCondition)}
           </View>
 
           {/* Description */}

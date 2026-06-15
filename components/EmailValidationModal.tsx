@@ -1,11 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  email?: string;
+};
+
 /**
  * Modal component to display email validation errors
  * Shows when user tries to sign up with non-school email
  */
-export default function EmailValidationModal({ visible, onClose, email }) {
+export default function EmailValidationModal({ visible, onClose, email }: Props) {
   // Card springs up slightly as the backdrop fades in
   const cardScale = useRef(new Animated.Value(0.9)).current;
 

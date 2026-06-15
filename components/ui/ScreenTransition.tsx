@@ -1,5 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Dimensions } from 'react-native';
+import { Animated, Easing, Dimensions, StyleProp, ViewStyle } from 'react-native';
+
+type TransitionType = 'push' | 'pop' | 'modal' | 'tab' | 'none';
+
+type Props = {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  type?: TransitionType;
+};
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -23,8 +31,8 @@ const TRANSITIONS = {
   tab: { translateX: 0, translateY: 0, fade: true, scaleFrom: 0.96, duration: 220 },
 };
 
-export default function ScreenTransition({ children, style, type = 'none' }) {
-  const config = TRANSITIONS[type];
+export default function ScreenTransition({ children, style, type = 'none' }: Props) {
+  const config = TRANSITIONS[type as keyof typeof TRANSITIONS];
   const anim = useRef(new Animated.Value(config ? 0 : 1)).current;
 
   useEffect(() => {
@@ -43,7 +51,7 @@ export default function ScreenTransition({ children, style, type = 'none' }) {
     return <Animated.View style={style}>{children}</Animated.View>;
   }
 
-  const transform = [];
+  const transform: any[] = [];
   if (config.translateX !== 0) {
     transform.push({
       translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [config.translateX, 0] }),
